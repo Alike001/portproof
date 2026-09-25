@@ -1,0 +1,32 @@
+{
+  "name": "portproof",
+  "version": "0.1.0",
+  "description": "Semantic backport verification — deterministic proof that a bug fix preserved its intended behavior after being moved to an older release branch",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
+    "test": "NODE_OPTIONS=--experimental-vm-modules node_modules/.bin/jest --forceExit",
+    "portproof": "node --import tsx/esm src/cli.ts",
+    "portproof:built": "node dist/cli.js"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.14.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.14.0"
+  }
+}
