@@ -1,0 +1,11 @@
+--- a/src/request.js
++++ b/src/request.js
+@@ -14,7 +14,7 @@
+ 
+ export function createRequestOptions(env = {}) {
+   return {
+-    timeout: parseLegacyTimeout(env)
++    timeout: parseModernTimeout(env)
+   };
+ }
+ 

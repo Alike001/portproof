@@ -1,0 +1,30 @@
+{
+  "version": "1",
+  "contractId": "create-request-options-zero-timeout",
+  "targetRef": "demo-clean-backport",
+
+  "allowedPaths": [
+    "src/request.js"
+  ],
+
+  "modifiedPaths": [
+    "src/request.js"
+  ],
+
+  "reasoning": "On the target branch, createRequestOptions delegates to parseLegacyTimeout which uses `parsed || 5000`. When REQUEST_TIMEOUT_MS is '0', Number('0') is 0, and `0 || 5000` evaluates to 5000 — collapsing the intended zero value to the default. The target branch already contains parseModernTimeout with the correct guard `Number.isFinite(parsed) ? parsed : 5000`, which returns 0 for a finite zero input. That function is dead code: never called by the public API. The smallest target-native repair is to change the single call site in createRequestOptions from parseLegacyTimeout(env) to parseModernTimeout(env). This wires the already-present correct logic into the public API path without adding new code, removing any existing function, or touching tests or proof infrastructure.",
+
+  "expectedEffect": {
+    "publicApi": "createRequestOptions",
+    "setup": {
+      "REQUEST_TIMEOUT_MS": "0"
+    },
+    "observable": {
+      "timeout": 0
+    }
+  },
+
+  "proofMutationRequired": false,
+  "testMutationRequired": false,
+
+  "uncertainties": []
+}
