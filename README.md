@@ -1,53 +1,56 @@
 # PortProof
 
-> A clean cherry-pick proves the code moved. PortProof proves the fix moved.
+> A clean cherry-pick proves the code moved.<br>
+> **PortProof proves the fix moved.**
 
-PortProof is a repository-agnostic semantic backport verification framework. The hackathon release ships with a JavaScript/TypeScript adapter and a prepared scenario that demonstrates the clean-but-wrong backport failure mode.
+Git can apply a backport cleanly and CI can pass while the intended behavior is still missing. PortProof turns that behavioral intent into frozen executable evidence and tests it on the target release through its real public path.
 
-A cherry-pick, build, or existing test suite can succeed while an older release branch routes public behavior through different code. PortProof validates a structured behavior contract, freezes an executable public-boundary proof, runs it in an isolated target checkout, and derives `PROVEN`, `NOT_PROVEN`, or `UNVERIFIABLE` only from deterministic evidence.
+```text
+Git / mechanical application   CLEAN
+Existing target tests          PASS
+Semantic behavior proof        FAIL
+PortProof                      NOT_PROVEN
+```
 
-## Prepared web demo
+IBM Bob reconstructs intent, independently maps the older target, creates a `BehaviorContract`, generates executable evidence, and can propose a bounded repair. Deterministic PortProof code validates those artifacts, freezes the proof bytes, runs preparation/tests/proof, enforces repair policy, and alone assigns `PROVEN`, `NOT_PROVEN`, or `UNVERIFIABLE`.
 
-Requirements: Node.js 20+, npm, and Git.
+**Bob proposes. PortProof proves.**
+
+## Prepared demo vs product
+
+| | Prepared hosted demo | Repository-oriented product |
+|---|---|---|
+| Purpose | Immediate clean-but-wrong walkthrough | Verify a real local repository |
+| Input | Fixed `semantic-backport` scenario | Repository path, source ref, target ref, Bob evidence |
+| Execution | Constrained Express API | Local `portproof verify-repo` CLI |
+| Safety boundary | Never accepts arbitrary repositories or commands | User-owned config, isolated temporary Git checkout |
+
+Both paths call the same deterministic verification core. The demo is intentionally constrained; the CLI is the actual repository-oriented product.
+
+## Real-world validation
+
+PortProof was independently exercised against the public TypeScript repository [`korthout/backport-action`](https://github.com/korthout/backport-action), separate from the prepared fixture. This reproduced a documented historical fix; it is not a claim of affiliation or discovery of a previously unknown bug.
+
+Behavior under proof: `getMentionedIssueRefs(' #042 ')` must return `[]`.
+
+| Historical target | Preparation | Existing tests | Observed | Verdict |
+|---|---:|---:|---|---|
+| `v4.0.1` | PASS | PASS | `["#042"]` | `NOT_PROVEN` |
+| `v4.1.0` | PASS | PASS | `[]` | `PROVEN` |
+
+Both runs used proof SHA-256 `ab09a72fd7f02c24c00f5714faa1f572d589ec31556d0604e9f3cfd57bf458d5`; every source/copy/pre/post hash matched. See the [full validation record](docs/REAL_WORLD_VALIDATION.md) and the [captured evidence](docs/evidence/real-world/).
+
+## Quick start
+
+Requirements: Node.js 20+, npm, and Git. Commands below use the `portproof` executable name; inside this source checkout, run it as `npm run portproof -- <command>`.
+
+### 1. Initialize the repository
 
 ```sh
-npm install
-npm run dev
+portproof init --repo /path/to/repository
 ```
 
-Open `http://localhost:5173`. Vite serves the React application and proxies the constrained demo API to the Express server on port `4174`.
-
-For a production-style local run:
-
-```sh
-npm run build
-npm start
-```
-
-The hosted web surface intentionally accepts only the bundled `semantic-backport` scenario. It does not accept repository paths or arbitrary commands. The demo shows real core execution: a clean target with passing tests is `NOT_PROVEN`, then a policy-validated repair becomes `PROVEN` under the exact same frozen proof.
-
-## Use PortProof on a repository
-
-Initialize a local JavaScript/TypeScript Git repository:
-
-```sh
-npm run portproof -- init --repo /path/to/repository
-```
-
-This creates `.portproof/project.json` with a shell-free test command:
-
-```json
-{
-  "version": "1",
-  "language": "javascript",
-  "test": {
-    "command": "npm",
-    "args": ["test"]
-  }
-}
-```
-
-The default stays minimal and runs no setup. Repositories that need dependencies or compiled runtime output must explicitly add ordered, user-owned preparation commands:
+This creates a minimal `.portproof/project.json`. If the target needs dependencies or compilation, add explicit ordered preparation commands:
 
 ```json
 {
@@ -57,54 +60,106 @@ The default stays minimal and runs no setup. Repositories that need dependencies
     { "command": "npm", "args": ["ci"] },
     { "command": "npm", "args": ["run", "build"] }
   ],
-  "test": {
-    "command": "npm",
-    "args": ["test"]
-  }
+  "test": { "command": "npm", "args": ["test"] }
 }
 ```
 
-PortProof runs these commands in order with shell execution disabled and stops on the first failure. Preparation runs only in the isolated target checkout. Generated untracked or ignored files are allowed, but any change to tracked files makes the run `UNVERIFIABLE`.
+Commands are executable-plus-argument arrays and run with shell execution disabled. Preparation may generate ignored or untracked output, but modifying tracked files fails closed.
 
-Open the repository in IBM Bob using the `portproof-verifier` mode and `semantic-backport` Skill. Bob investigates the source and target independently and generates SourceAnalysis, TargetAnalysis, BehaviorContract, TargetMapping, and ExecutableProof artifacts. Then run:
+### 2. Generate semantic evidence with IBM Bob
+
+Open the repository in IBM Bob using:
+
+- custom mode: `portproof-verifier`
+- Skill: `semantic-backport`
+
+The workflow produces SourceAnalysis, independent TargetAnalysis, a `BehaviorContract`, TargetMapping, and ExecutableProof metadata plus the exact proof file.
+
+### 3. Verify the target
 
 ```sh
-npm run portproof -- verify-repo \
+portproof verify-repo \
   --repo /path/to/repository \
-  --source fix/timeout-zero \
-  --target release/1.x \
-  --contract /path/to/repository/artifacts/behavior-contract.json \
-  --proof-metadata /path/to/repository/artifacts/executable-proof.json
+  --source <source-fix-ref> \
+  --target <target-release-ref> \
+  --contract <behavior-contract.json> \
+  --proof-metadata <executable-proof.json>
 ```
 
-PortProof resolves both refs, clones the target commit into a temporary checkout, runs configured preparation, validates the proof's declared public import against the prepared checkout, runs the test executable with its argument array, copies the proof's exact bytes without rewriting, and records source/copy/pre/post SHA-256 hashes. The supplied repository is not checked out or modified by verification.
+PortProof resolves both refs and SHAs, clones the target into a temporary checkout, prepares it, validates the declared public boundary, runs existing tests, executes the unchanged proof, and writes a structured Backport Proof Report. The supplied repository is never checked out or modified.
 
-## Trust boundary
-
-IBM Bob proposes structured evidence and, when requested, a repair. Deterministic PortProof code owns:
-
-- strict Zod schema validation;
-- Git ref and commit provenance;
-- JavaScript/TypeScript static public-boundary validation;
-- isolated preparation, test, and proof execution without a shell;
-- contract and proof integrity hashes;
-- the final machine verdict.
-
-Bob never assigns the final verdict. Malformed evidence, missing refs, unsupported configuration, unparseable observations, or failed execution infrastructure fail closed as `UNVERIFIABLE`.
-
-## Current scope
-
-The current adapter supports local Git repositories containing JavaScript or TypeScript projects whose preparation and target tests can be invoked as executables plus argument arrays. Proofs execute with Node and must statically import and invoke the declared repository-relative public boundary. Preparation is trusted only from the local `.portproof/project.json`; Bob artifacts cannot define commands.
-
-PortProof does not currently provide adapters for Python, Go, Rust, Java, remote repository execution, automatic setup inference, or universal API correctness. The `LanguageAdapter` boundary isolates public-proof validation and observation parsing so future languages can be added without weakening the deterministic core.
-
-The original prepared commands remain available:
+## Run the prepared web demo
 
 ```sh
-npm run portproof -- verify --fixture semantic-backport --branch demo-clean-backport
-npm run portproof -- repair --fixture semantic-backport --branch demo-clean-backport \
-  --contract artifacts/bob/behavior-contract.candidate.json \
-  --proof-metadata artifacts/bob/executable-proof.json \
-  --repair-proposal artifacts/bob/repair-proposal.json \
-  --patch artifacts/bob/repairs/request-timeout-zero.patch
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The broken target shows passing tests plus a failing behavior proof; applying the Bob-proposed repair invokes the real deterministic repair gate and reverifies the exact same proof.
+
+Production-style local run:
+
+```sh
+npm run build
+npm start
+```
+
+## Architecture and trust boundary
+
+```text
+IBM Bob
+  SourceAgent · TargetAgent · BehaviorMapper · ProofAdapter · RepairAgent
+                              │
+                    structured evidence
+                              ▼
+PortProof deterministic core
+  schema validation → public-boundary validation → SHA-256 freezing
+  → preparation/tests/proof execution → patch policy → verdict
+```
+
+Bob may investigate, map, generate evidence, and propose repairs. Bob cannot assign a verdict. PortProof derives its verdict from validated artifacts, Git provenance, exact hashes, and measured process results. Malformed evidence or unavailable infrastructure becomes `UNVERIFIABLE`, never a guessed result.
+
+## Meaningful IBM Bob 2.0 use
+
+PortProof uses Bob as part of the product workflow—not merely as the coding assistant that built it:
+
+- focused agent tasks reconstruct the source fix and inspect the target;
+- SourceAgent and TargetAgent reason independently to avoid architectural anchoring;
+- the reusable `semantic-backport` Skill defines the evidence workflow;
+- the `portproof-verifier` custom mode bounds Bob to investigation and artifact production;
+- structured JSON artifacts hand reasoning across the deterministic trust boundary;
+- RepairAgent proposes a path-bounded repair that PortProof independently validates and reverifies.
+
+## Verdicts
+
+- `PROVEN`: preparation and existing tests passed, evidence and hashes are valid, and the frozen semantic proof passed.
+- `NOT_PROVEN`: valid evidence executed meaningfully, existing tests passed, but the contracted behavior failed.
+- `UNVERIFIABLE`: malformed evidence, unsupported configuration, integrity failure, missing infrastructure, or another condition prevented a meaningful proof.
+
+## Current support and limitations
+
+Current support:
+
+- local Git repositories;
+- JavaScript/TypeScript through the shipped JavaScript adapter;
+- user-specified source and target refs;
+- explicit deterministic preparation and test commands;
+- immutable Node-executed public-boundary proofs.
+
+Limitations:
+
+- no adapters for other languages yet;
+- dependency preparation may require network access;
+- temporary Git checkouts provide repository isolation, not OS-container isolation;
+- the hosted demo intentionally does not accept arbitrary repositories;
+- PortProof proves the validated contract and declared path, not universal program correctness.
+
+## Development checks
+
+```sh
+npm test
+npm run typecheck
+npm run lint
+npm run build
+npm audit --omit=dev
 ```
