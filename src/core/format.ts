@@ -154,3 +154,49 @@ export function formatReport(report: BackportProofReport): string {
 
   return lines.join("\n");
 }
+
+function repairValue(value: unknown): string {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    const values = Object.values(value);
+    if (values.length === 1) return stringifyValue(values[0]);
+  }
+  return stringifyValue(value);
+}
+
+/** Render the deterministic before/repair/after history. */
+export function formatRepairReport(report: BackportProofReport): string {
+  const repair = report.repair;
+  if (!repair) return formatReport(report);
+
+  const lines: string[] = ["", bold("PORTPROOF REPAIR VERIFICATION"), separator()];
+  const appendStage = (label: string, stage: typeof repair.before): void => {
+    lines.push("", bold(label));
+    if (!stage) {
+      lines.push(row("Status", yellow("UNAVAILABLE")));
+      return;
+    }
+    lines.push(row("Existing tests", passToken(stage.existingTestsPassed)));
+    lines.push(row("Behavior proof", passToken(stage.proofPassed)));
+    lines.push(row("Expected", repairValue(stage.expected)));
+    lines.push(row("Observed", repairValue(stage.observed)));
+    lines.push(row("Proof hash", dim(stage.proofHash)));
+    lines.push(row("Verdict", verdictToken(stage.verdict)));
+  };
+
+  appendStage("BEFORE REPAIR", repair.before);
+
+  lines.push("", bold("BOB REPAIR"));
+  lines.push(row("Patch", repair.applied && repair.policyValid ? green("VALID") : yellow("REJECTED")));
+  lines.push(row("Modified paths", repair.changedPaths.join(", ") || "none"));
+  const proofHash = repair.before?.proofHash ?? report.integrity?.proofHash;
+  if (proofHash) lines.push(row("Proof hash", dim(proofHash)));
+
+  appendStage("AFTER REPAIR", repair.after);
+
+  lines.push("", bold("FINAL VERDICT"), separator(), `  ${verdictToken(report.verdict)}`);
+  if (report.unverifiableReason !== undefined) {
+    lines.push("", dim(`  Reason: ${report.unverifiableReason}`));
+  }
+  lines.push(separator(), "");
+  return lines.join("\n");
+}

@@ -10,6 +10,7 @@
  */
 
 import { join } from "node:path";
+import { semanticBackportRepairPolicy } from "./semantic-backport-repair-policy.js";
 import type { ScenarioAdapter } from "../core/types.js";
 
 /**
@@ -23,6 +24,7 @@ const BOB_PROOF_OUTPUT_PATTERN = /PORTPROOF_OBSERVED timeout=(\d+)/;
 
 export class SemanticBackportAdapter implements ScenarioAdapter {
   readonly name = "semantic-backport";
+  readonly repairPolicy = semanticBackportRepairPolicy;
 
   constructor(readonly repositoryRoot: string) {}
 

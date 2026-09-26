@@ -18,6 +18,8 @@ export interface RunProcessOptions {
   env?: Record<string, string>;
   /** Override the default timeout. */
   timeoutMs?: number;
+  /** Exact bytes supplied to stdin, without shell or text rewriting. */
+  stdin?: string | Uint8Array;
 }
 
 /**
@@ -30,7 +32,7 @@ export async function runProcess(
   args: string[],
   options: RunProcessOptions
 ): Promise<ProcessResult> {
-  const { cwd, env, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const { cwd, env, stdin, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
   const startMs = Date.now();
 
@@ -39,7 +41,7 @@ export async function runProcess(
       cwd,
       shell: false,
       env: { ...process.env, ...env },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
 
     const stdoutChunks: Buffer[] = [];
@@ -51,6 +53,11 @@ export async function runProcess(
     child.stderr.on("data", (chunk: Buffer) => {
       stderrChunks.push(chunk);
     });
+
+    // A command may exit before consuming stdin; its non-zero process result
+    // remains authoritative, while EPIPE must not become an unhandled error.
+    child.stdin.on("error", () => undefined);
+    child.stdin.end(stdin);
 
     let timedOut = false;
     const timer = setTimeout(() => {

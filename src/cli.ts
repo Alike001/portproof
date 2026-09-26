@@ -18,8 +18,9 @@ import { Command } from "commander";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verify } from "./core/verify.js";
+import { verifyRepair } from "./core/repair.js";
 import { saveReport } from "./core/report.js";
-import { formatReport } from "./core/format.js";
+import { formatRepairReport, formatReport } from "./core/format.js";
 import { SemanticBackportAdapter } from "./scenarios/semantic-backport.js";
 import type { VerifyOptions } from "./core/types.js";
 
@@ -118,6 +119,60 @@ program
       process.stdout.write(formatReport(report));
 
       // Save JSON report
+      try {
+        const reportPath = await saveReport(REPO_ROOT, report);
+        console.log(`Report saved: ${reportPath}`);
+      } catch (saveErr) {
+        console.error(`Warning: could not save report: ${String(saveErr)}`);
+      }
+
+      process.exit(exitCodeForVerdict(report.verdict));
+    } catch (err) {
+      console.error(`Unexpected error: ${String(err)}`);
+      process.exit(2);
+    }
+  });
+
+program
+  .command("repair")
+  .description("Validate and verify a Bob repair using the exact frozen proof")
+  .requiredOption("--fixture <name>", "Fixture to repair (e.g. semantic-backport)")
+  .requiredOption("--branch <branch>", "Target branch to repair")
+  .requiredOption("--contract <path>", "BehaviorContract JSON candidate")
+  .requiredOption("--proof-metadata <path>", "ExecutableProof metadata JSON")
+  .requiredOption("--repair-proposal <path>", "RepairProposal JSON")
+  .requiredOption("--patch <path>", "Exact repair patch")
+  .option("--keep-workspace", "Keep the isolated repaired workspace for debugging")
+  .action(async (opts: {
+    fixture: string;
+    branch: string;
+    contract: string;
+    proofMetadata: string;
+    repairProposal: string;
+    patch: string;
+    keepWorkspace: boolean;
+  }) => {
+    let scenario;
+    try {
+      scenario = getScenario(opts.fixture, REPO_ROOT);
+    } catch (err) {
+      console.error(`Error: ${String(err)}`);
+      process.exit(3);
+    }
+
+    try {
+      const report = await verifyRepair(scenario, {
+        fixture: opts.fixture,
+        branch: opts.branch,
+        contractPath: resolve(REPO_ROOT, opts.contract),
+        proofMetadataPath: resolve(REPO_ROOT, opts.proofMetadata),
+        repairProposalPath: resolve(REPO_ROOT, opts.repairProposal),
+        patchPath: resolve(REPO_ROOT, opts.patch),
+        keepWorkspace: opts.keepWorkspace,
+      });
+
+      process.stdout.write(formatRepairReport(report));
+
       try {
         const reportPath = await saveReport(REPO_ROOT, report);
         console.log(`Report saved: ${reportPath}`);

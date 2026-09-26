@@ -64,6 +64,54 @@ export interface ExecutableProofEvidence {
   integrityValid: boolean;
 }
 
+/** Schema-validated Bob proposal; allowedPaths remains descriptive only. */
+export interface RepairProposal {
+  version: "1";
+  contractId: string;
+  targetRef: string;
+  allowedPaths: string[];
+  modifiedPaths: string[];
+  reasoning: string;
+  expectedEffect: {
+    publicApi: string;
+    setup: Record<string, string>;
+    observable: unknown;
+  };
+  proofMutationRequired: false;
+  testMutationRequired: false;
+  uncertainties: string[];
+}
+
+/** PortProof-owned authorization policy for one repair scenario. */
+export interface RepairPolicy {
+  readonly allowedPaths: readonly string[];
+}
+
+export interface RepairStageRecord {
+  verdict: Verdict;
+  existingTestsPassed: boolean;
+  proofPassed: boolean;
+  expected: unknown;
+  observed: unknown;
+  proofHash: string;
+  contractHash: string;
+}
+
+export interface RepairReportDetails {
+  proposal: {
+    contractId: string;
+    targetRef: string;
+    modifiedPaths: string[];
+  } | null;
+  patchHash: string | null;
+  baseCommitSha: string | null;
+  applied: boolean;
+  policyValid: boolean;
+  changedPaths: string[];
+  before: RepairStageRecord | null;
+  after: RepairStageRecord | null;
+}
+
 // ---------------------------------------------------------------------------
 // Process execution result
 // ---------------------------------------------------------------------------
@@ -164,6 +212,9 @@ export interface BackportProofReport {
     executableProof: ExecutableProofEvidence;
   };
 
+  /** Present for deterministic repair ingestion and reverification runs. */
+  repair?: RepairReportDetails;
+
   /** Final deterministic verdict. */
   verdict: Verdict;
 
@@ -189,6 +240,9 @@ export interface ScenarioAdapter {
 
   /** Root used to constrain Bob artifact paths. */
   readonly repositoryRoot: string;
+
+  /** Deterministic authorization owned by PortProof, never by Bob metadata. */
+  readonly repairPolicy: RepairPolicy;
 
   /**
    * Path to the Git bundle file, relative to the repository root.
@@ -234,5 +288,15 @@ export interface VerifyOptions {
   /** Explicit ExecutableProof metadata path for Bob-artifact verification. */
   proofMetadataPath?: string;
   /** When true, skip workspace cleanup after the run (for debugging). */
+  keepWorkspace?: boolean;
+}
+
+export interface RepairVerifyOptions {
+  fixture: string;
+  branch: string;
+  contractPath: string;
+  proofMetadataPath: string;
+  repairProposalPath: string;
+  patchPath: string;
   keepWorkspace?: boolean;
 }
