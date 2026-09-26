@@ -42,6 +42,13 @@ describe("prepared demo API", () => {
     );
   });
 
+  it("exposes a lightweight health check without running verification", async () => {
+    const response = await fetch(`${baseUrl}/api/health`);
+
+    expect(response.status).toBe(200);
+    expect(await json(response)).toEqual({ status: "ok", service: "portproof" });
+  });
+
   it("runs the real broken proof, then proves the real repair with one frozen hash", async () => {
     const createResponse = await fetch(`${baseUrl}/api/demo/run`, {
       method: "POST",

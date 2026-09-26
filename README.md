@@ -42,7 +42,7 @@ Both runs used proof SHA-256 `ab09a72fd7f02c24c00f5714faa1f572d589ec31556d0604e9
 
 ## Quick start
 
-Requirements: Node.js 20+, npm, and Git. Commands below use the `portproof` executable name; inside this source checkout, run it as `npm run portproof -- <command>`.
+Requirements: Node.js 24+, npm, and Git. Commands below use the `portproof` executable name; inside this source checkout, run it as `npm run portproof -- <command>`.
 
 ### 1. Initialize the repository
 
@@ -103,6 +103,18 @@ Production-style local run:
 npm run build
 npm start
 ```
+
+### Docker deployment
+
+The production image serves the Express API and built Vite app as one Node 24 service. It includes Git, npm, the prepared fixture bundle, and the Bob-generated evidence required by the constrained hosted demo.
+
+```sh
+docker build -t portproof .
+docker run --rm -p 8080:8080 -e PORT=8080 portproof
+curl http://127.0.0.1:8080/api/health
+```
+
+The service binds to `0.0.0.0`; reports under `.portproof/runs/` are ephemeral unless the deployment provides persistent writable storage. The hosted API remains limited to the prepared scenario—use the local CLI for repository-oriented verification.
 
 ## Architecture and trust boundary
 

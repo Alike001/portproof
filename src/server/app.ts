@@ -22,7 +22,7 @@ export function createApp(repositoryRoot: string, service = new DemoService(repo
   app.use(express.json({ limit: "4kb", strict: true }));
 
   app.get("/api/health", (_request, response) => {
-    response.json({ ok: true });
+    response.json({ status: "ok", service: "portproof" });
   });
 
   app.get("/api/demo/evidence", async (_request, response, next) => {

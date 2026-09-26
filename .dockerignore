@@ -1,0 +1,21 @@
+.git
+.gitignore
+.bob
+.portproof
+node_modules
+dist
+coverage
+bob_sessions
+docs/evidence
+tests
+*.log
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+tmp
+temp
+
+# Required runtime inputs are intentionally not excluded:
+# fixtures/semantic-backport-fixture.bundle
+# artifacts/bob/
