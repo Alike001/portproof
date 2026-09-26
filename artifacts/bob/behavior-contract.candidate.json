@@ -1,0 +1,14 @@
+{
+  "version": "1",
+  "id": "create-request-options-zero-timeout",
+  "intent": "When REQUEST_TIMEOUT_MS is set to '0', calling the public createRequestOptions API must return a timeout value of 0, not fall back to the default of 5000.",
+  "observable": {
+    "setup": {
+      "REQUEST_TIMEOUT_MS": "0"
+    },
+    "operation": "createRequestOptions({ REQUEST_TIMEOUT_MS: '0' })",
+    "expected": {
+      "timeout": 0
+    }
+  }
+}

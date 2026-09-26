@@ -1,0 +1,50 @@
+{
+  "version": "1",
+  "contractId": "create-request-options-zero-timeout",
+
+  "source": {
+    "publicApi": "createRequestOptions",
+    "implementationPaths": ["src/request.js:createRequestOptions", "src/request.js:parseModernTimeout"]
+  },
+
+  "target": {
+    "publicApi": "createRequestOptions",
+    "implementationPaths": ["src/request.js:createRequestOptions", "src/request.js:parseLegacyTimeout"],
+    "routingPath": ["createRequestOptions", "parseLegacyTimeout"]
+  },
+
+  "semanticGap": {
+    "exists": true,
+    "description": "On the source-fix branch, createRequestOptions delegates to parseModernTimeout which uses `Number.isFinite(parsed) ? parsed : 5000`, preserving 0 as a valid return value. On the target release/1.x branch, createRequestOptions delegates to parseLegacyTimeout which uses `Number(raw) || 5000`, causing numeric 0 to be evaluated as falsy and fall back to 5000. The target module contains a parseModernTimeout function with the same identifier but it is dead code from the public API perspective — it is never called by createRequestOptions. The observable effect is that createRequestOptions({ REQUEST_TIMEOUT_MS: '0' }).timeout returns 5000 on the target branch instead of the intended 0."
+  },
+
+  "proofRequirements": {
+    "setup": {
+      "REQUEST_TIMEOUT_MS": "0"
+    },
+    "invoke": "createRequestOptions({ REQUEST_TIMEOUT_MS: '0' })",
+    "observe": "timeout field of the returned options object",
+    "expected": 0
+  },
+
+  "evidenceLinks": {
+    "source": [
+      "source-analysis.json#evidence[0]: parseModernTimeout fix changes `return parsed || 5000` to `return Number.isFinite(parsed) ? parsed : 5000`, preserving zero",
+      "source-analysis.json#evidence[1]: on source-fix commit, createRequestOptions calls parseModernTimeout(env), not parseLegacyTimeout(env)",
+      "source-analysis.json#observableCandidate: operation is createRequestOptions({ REQUEST_TIMEOUT_MS: '0' }), expected { timeout: 0 }",
+      "source-analysis.json#regressionEvidence[0].limitation: regression test exercises __internal.parseModernTimeout directly and does not cover the production routing path through createRequestOptions"
+    ],
+    "target": [
+      "target-analysis.json#routingPaths[0]: createRequestOptions delegates entirely to parseLegacyTimeout; parseModernTimeout is not called by any exported path",
+      "target-analysis.json#evidence[0]: parseLegacyTimeout line 5 uses `return parsed || 5000`; when raw is '0', Number('0') is 0, and 0 || 5000 evaluates to 5000",
+      "target-analysis.json#evidence[1]: parseModernTimeout on the target branch is byte-for-byte identical to parseLegacyTimeout and is never invoked from createRequestOptions",
+      "target-analysis.json#evidence[2]: createRequestOptions lines 15-19 call only parseLegacyTimeout; parseModernTimeout is dead code from the public API perspective",
+      "target-analysis.json#architecturalObservations[2]: the || 5000 fallback collapses any falsy Number result — including 0 — to 5000"
+    ]
+  },
+
+  "uncertainties": [
+    "TargetAnalysis explicitly notes that the intended semantics of REQUEST_TIMEOUT_MS=0 (no timeout vs. immediate timeout vs. use default) cannot be determined from target-branch evidence alone. This contract resolves that uncertainty in favour of SourceAnalysis, which establishes that 0 means 'disable timeout' (timeout: 0). TargetAnalysis does not contradict this; it simply lacks independent confirmation.",
+    "The purpose of parseModernTimeout on the target branch — whether it is a migration artefact, a dead-code import from a partial cherry-pick, or intentionally staged for future wiring — is not documented in the allowed target-branch evidence. This does not affect the proof requirement but may affect the repair approach in a later task."
+  ]
+}
