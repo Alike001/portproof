@@ -6,8 +6,9 @@
  *   Deterministic code validates and executes it.
  *   Bob never assigns the final verdict.
  *
- * Gates 1 + 2 contain no AI components. Every verdict comes from
- * process exit codes and captured output only.
+ * The deterministic core contains no AI components. Every verdict comes from
+ * validated evidence, integrity records, process exit codes, and captured
+ * output only.
  */
 
 // ---------------------------------------------------------------------------
@@ -16,6 +17,28 @@
 
 /** The three machine-verifiable verdict states. */
 export type Verdict = "PROVEN" | "NOT_PROVEN" | "UNVERIFIABLE";
+
+// ---------------------------------------------------------------------------
+// Behavior contract and proof integrity
+// ---------------------------------------------------------------------------
+
+/** Schema-validated statement of the observable behavior under proof. */
+export interface BehaviorContract {
+  version: "1";
+  id: string;
+  intent: string;
+  observable: {
+    setup: Record<string, string>;
+    operation: string;
+    expected: unknown;
+  };
+}
+
+/** SHA-256 fingerprints binding a verification run to its evidence. */
+export interface ProofIntegrityRecord {
+  contractHash: string;
+  proofHash: string;
+}
 
 // ---------------------------------------------------------------------------
 // Process execution result
@@ -99,6 +122,15 @@ export interface BackportProofReport {
     proof: SemanticProofResult;
   };
 
+  /** Present when the behavior contract was loaded and validated. */
+  contract?: {
+    value: BehaviorContract;
+    hash: string;
+  };
+
+  /** Present only when both contract and proof fingerprints were created. */
+  integrity?: ProofIntegrityRecord;
+
   /** Final deterministic verdict. */
   verdict: Verdict;
 
@@ -128,6 +160,12 @@ export interface ScenarioAdapter {
    */
   readonly bundlePath: string;
 
+  /** Path to the fixture-owned behavior contract JSON file. */
+  readonly contractPath: string;
+
+  /** Path to the executable proof artifact in the isolated workspace. */
+  proofFilePath(workspaceDir: string): string;
+
   /**
    * Shell-free command + args to run the existing test suite.
    * Evaluated in the cloned workspace directory.
@@ -146,11 +184,6 @@ export interface ScenarioAdapter {
    */
   parseObserved(stdout: string): unknown;
 
-  /**
-   * The value the contract asserts must hold.
-   * Kept inside the adapter; the generic runner does not know this.
-   */
-  readonly expectedValue: unknown;
 }
 
 // ---------------------------------------------------------------------------

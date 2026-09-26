@@ -11,11 +11,18 @@
  */
 
 import { createWorkspace, safeCleanup, WorkspaceError } from "./fixture.js";
+import {
+  hashBehaviorContract,
+  hashProofFile,
+  loadBehaviorContract,
+} from "./contract.js";
 import { runProcess } from "./runner.js";
 import { generateRunId } from "./report.js";
 import type {
   BackportProofReport,
+  BehaviorContract,
   ExistingTestsResult,
+  ProofIntegrityRecord,
   ScenarioAdapter,
   SemanticProofResult,
   Verdict,
@@ -108,7 +115,29 @@ export async function verify(
   const startedAt = new Date().toISOString();
 
   // ------------------------------------------------------------------
-  // 1. Setup: create isolated workspace
+  // 1. Validate and fingerprint the fixture-owned behavior contract
+  // ------------------------------------------------------------------
+  let contract: BehaviorContract;
+  let contractHash: string;
+
+  try {
+    contract = await loadBehaviorContract(scenario.contractPath);
+    contractHash = hashBehaviorContract(contract);
+  } catch (error) {
+    return buildUnverifiableReport({
+      runId,
+      fixture: scenario.name,
+      branch: options.branch,
+      commitSha: "unknown",
+      startedAt,
+      reason: `Behavior contract validation failed: ${String(error)}`,
+    });
+  }
+
+  const contractArtifact = { value: contract, hash: contractHash };
+
+  // ------------------------------------------------------------------
+  // 2. Setup: create isolated workspace
   // ------------------------------------------------------------------
   let workspaceDir: string | undefined;
   let commitSha = "unknown";
@@ -130,11 +159,37 @@ export async function verify(
       commitSha: "unknown",
       startedAt,
       reason,
+      contract: contractArtifact,
+      expected: contract.observable.expected,
     });
   }
 
   // ------------------------------------------------------------------
-  // 2. Run existing tests
+  // 3. Fingerprint the exact executable proof bytes
+  // ------------------------------------------------------------------
+  let integrity: ProofIntegrityRecord;
+
+  try {
+    const proofHash = await hashProofFile(scenario.proofFilePath(workspaceDir));
+    integrity = { contractHash, proofHash };
+  } catch (error) {
+    if (!options.keepWorkspace) {
+      await safeCleanup(workspaceDir);
+    }
+    return buildUnverifiableReport({
+      runId,
+      fixture: scenario.name,
+      branch: options.branch,
+      commitSha,
+      startedAt,
+      reason: `Executable proof integrity could not be established: ${String(error)}`,
+      contract: contractArtifact,
+      expected: contract.observable.expected,
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // 4. Run existing tests
   // ------------------------------------------------------------------
   const { command: testCmd, args: testArgs } =
     scenario.existingTestCommand(workspaceDir);
@@ -152,7 +207,7 @@ export async function verify(
   };
 
   // ------------------------------------------------------------------
-  // 3. Run semantic behavior proof
+  // 5. Run semantic behavior proof
   // ------------------------------------------------------------------
   const { command: proofCmd, args: proofArgs } =
     scenario.proofCommand(workspaceDir);
@@ -167,19 +222,19 @@ export async function verify(
     exitCode: proofProc.exitCode,
     passed: proofProc.exitCode === 0,
     durationMs: proofProc.durationMs,
-    expected: scenario.expectedValue,
+    expected: contract.observable.expected,
     observed,
     stdout: proofProc.stdout,
     stderr: proofProc.stderr,
   };
 
   // ------------------------------------------------------------------
-  // 4. Assign verdict deterministically
+  // 6. Assign verdict deterministically
   // ------------------------------------------------------------------
   const { verdict, unverifiableReason } = assignVerdict(existingTests, semanticProof);
 
   // ------------------------------------------------------------------
-  // 5. Assemble report
+  // 7. Assemble report
   // ------------------------------------------------------------------
   const completedAt = new Date().toISOString();
 
@@ -192,12 +247,14 @@ export async function verify(
     completedAt,
     mechanical: { existingTests },
     semantic: { proof: semanticProof },
+    contract: contractArtifact,
+    integrity,
     verdict,
     ...(unverifiableReason !== undefined && { unverifiableReason }),
   };
 
   // ------------------------------------------------------------------
-  // 6. Cleanup workspace
+  // 8. Cleanup workspace
   // ------------------------------------------------------------------
   if (!options.keepWorkspace && workspaceDir) {
     await safeCleanup(workspaceDir);
@@ -217,6 +274,11 @@ interface UnverifiableParams {
   commitSha: string;
   startedAt: string;
   reason: string;
+  contract?: {
+    value: BehaviorContract;
+    hash: string;
+  };
+  expected?: unknown;
 }
 
 function buildUnverifiableReport(params: UnverifiableParams): BackportProofReport {
@@ -246,12 +308,13 @@ function buildUnverifiableReport(params: UnverifiableParams): BackportProofRepor
         exitCode: null,
         passed: false,
         durationMs: 0,
-        expected: null,
+        expected: params.expected ?? null,
         observed: null,
         stdout: "",
         stderr: "",
       },
     },
+    ...(params.contract !== undefined && { contract: params.contract }),
     verdict: "UNVERIFIABLE",
     unverifiableReason: params.reason,
   };

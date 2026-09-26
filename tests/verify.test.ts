@@ -6,8 +6,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
-import { stat, readFile } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verify } from "../src/core/verify.js";
 import { saveReport } from "../src/core/report.js";
@@ -36,6 +37,54 @@ async function runVerify(branch: string): Promise<{
 // ---------------------------------------------------------------------------
 
 const BUNDLE_PATH = resolve(REPO_ROOT, "fixtures", "semantic-backport-fixture.bundle");
+
+class ContractOverrideAdapter extends SemanticBackportAdapter {
+  constructor(
+    repoRoot: string,
+    private readonly overriddenContractPath: string
+  ) {
+    super(repoRoot);
+  }
+
+  override get contractPath(): string {
+    return this.overriddenContractPath;
+  }
+}
+
+class BundleOverrideAdapter extends SemanticBackportAdapter {
+  constructor(
+    repoRoot: string,
+    private readonly overriddenBundlePath: string
+  ) {
+    super(repoRoot);
+  }
+
+  override get bundlePath(): string {
+    return this.overriddenBundlePath;
+  }
+}
+
+class MissingProofAdapter extends SemanticBackportAdapter {
+  override proofFilePath(workspaceDir: string): string {
+    return join(workspaceDir, "proof", "missing-proof.js");
+  }
+}
+
+async function verifyWithContract(contents: string): Promise<BackportProofReport> {
+  const tempDir = await mkdtemp(join(tmpdir(), "portproof-contract-test-"));
+  const contractPath = join(tempDir, "contract.json");
+  await writeFile(contractPath, contents, "utf8");
+
+  try {
+    const scenario = new ContractOverrideAdapter(REPO_ROOT, contractPath);
+    return await verify(scenario, {
+      fixture: "semantic-backport",
+      branch: "demo-proven-backport",
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
 
 let bundleStatBefore: { size: number; mtimeMs: number };
 
@@ -91,6 +140,12 @@ describe("demo-clean-backport", () => {
   it("has no unverifiableReason", () => {
     expect(result.report.unverifiableReason).toBeUndefined();
   });
+
+  it("records matching SHA-256 contract and proof integrity hashes", () => {
+    expect(result.report.contract?.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(result.report.integrity?.contractHash).toBe(result.report.contract?.hash);
+    expect(result.report.integrity?.proofHash).toMatch(/^[0-9a-f]{64}$/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -127,6 +182,41 @@ describe("demo-proven-backport", () => {
 
   it("has no unverifiableReason", () => {
     expect(result.report.unverifiableReason).toBeUndefined();
+  });
+
+  it("includes the validated contract and integrity record", () => {
+    expect(result.report.contract?.value.observable.expected).toBe(0);
+    expect(result.report.integrity?.contractHash).toBe(result.report.contract?.hash);
+    expect(result.report.integrity?.proofHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Invalid evidence must fail closed
+// ---------------------------------------------------------------------------
+
+describe("invalid BehaviorContract evidence → UNVERIFIABLE", () => {
+  it("malformed JSON produces UNVERIFIABLE", async () => {
+    const report = await verifyWithContract('{ "version": "1",');
+
+    expect(report.verdict).toBe("UNVERIFIABLE");
+    expect(report.unverifiableReason).toContain("invalid JSON");
+    expect(report.verdict).not.toBe("NOT_PROVEN");
+  });
+
+  it("schema-invalid JSON produces UNVERIFIABLE", async () => {
+    const report = await verifyWithContract(
+      JSON.stringify({
+        version: "1",
+        id: "valid-id",
+        intent: "",
+        observable: { setup: {}, operation: "public request", expected: 0 },
+      })
+    );
+
+    expect(report.verdict).toBe("UNVERIFIABLE");
+    expect(report.unverifiableReason).toContain("schema validation failed");
+    expect(report.verdict).not.toBe("NOT_PROVEN");
   });
 });
 
@@ -183,6 +273,10 @@ describe("JSON report persistence", () => {
     expect(report.completedAt).toBeTruthy();
     expect(report.mechanical.existingTests).toBeDefined();
     expect(report.semantic.proof).toBeDefined();
+    expect(report.contract).toBeDefined();
+    expect(report.integrity).toBeDefined();
+    expect(report.integrity?.contractHash).toBeTruthy();
+    expect(report.integrity?.proofHash).toBeTruthy();
     expect(report.verdict).toBeDefined();
   });
 });
@@ -236,14 +330,30 @@ describe("workspace cleanup", () => {
 
 describe("infrastructure failure → UNVERIFIABLE", () => {
   it("a non-existent bundle path produces UNVERIFIABLE not NOT_PROVEN", async () => {
-    // Create an adapter that points to a non-existent bundle
-    const badAdapter = new SemanticBackportAdapter("/tmp/does-not-exist-portproof");
+    const badAdapter = new BundleOverrideAdapter(
+      REPO_ROOT,
+      "/tmp/does-not-exist-portproof/fixture.bundle"
+    );
     const report = await verify(
       badAdapter,
       { fixture: "semantic-backport", branch: "demo-clean-backport" }
     );
     expect(report.verdict).toBe("UNVERIFIABLE");
     expect(report.unverifiableReason).toBeTruthy();
+    expect(report.verdict).not.toBe("NOT_PROVEN");
+  });
+
+  it("a missing executable proof produces UNVERIFIABLE", async () => {
+    const badAdapter = new MissingProofAdapter(REPO_ROOT);
+    const report = await verify(
+      badAdapter,
+      { fixture: "semantic-backport", branch: "demo-proven-backport" }
+    );
+
+    expect(report.verdict).toBe("UNVERIFIABLE");
+    expect(report.unverifiableReason).toContain(
+      "Executable proof integrity could not be established"
+    );
     expect(report.verdict).not.toBe("NOT_PROVEN");
   });
 });

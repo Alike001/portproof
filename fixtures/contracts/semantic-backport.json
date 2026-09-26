@@ -1,0 +1,12 @@
+{
+  "version": "1",
+  "id": "request-timeout-zero-disables-timeout",
+  "intent": "REQUEST_TIMEOUT_MS=0 disables the request timeout through the public request path",
+  "observable": {
+    "setup": {
+      "REQUEST_TIMEOUT_MS": "0"
+    },
+    "operation": "create request options through the public request path",
+    "expected": 0
+  }
+}

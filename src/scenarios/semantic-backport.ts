@@ -28,6 +28,14 @@ export class SemanticBackportAdapter implements ScenarioAdapter {
     return join(this.repoRoot, "fixtures", "semantic-backport-fixture.bundle");
   }
 
+  get contractPath(): string {
+    return join(this.repoRoot, "fixtures", "contracts", "semantic-backport.json");
+  }
+
+  proofFilePath(workspaceDir: string): string {
+    return join(workspaceDir, "proof", "public-behavior-proof.js");
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   existingTestCommand(_dir: string): { command: string; args: string[] } {
     return { command: "npm", args: ["test"] };
@@ -48,7 +56,4 @@ export class SemanticBackportAdapter implements ScenarioAdapter {
     const parsed = parseInt(match[1], 10);
     return Number.isFinite(parsed) ? parsed : null;
   }
-
-  /** The behavioral contract asserts that timeout 0 disables the timeout. */
-  readonly expectedValue: number = 0;
 }
