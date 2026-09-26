@@ -10,8 +10,12 @@ import type { DemoReportResponse } from "../types.js";
 
 export function ReportContent({ payload }: { payload: DemoReportResponse }) {
   const { report, bobEvidence } = payload;
-  const sourceCommit = safeText(bobEvidence.sourceAnalysis.sourceCommit, "unknown");
+  const sourceRef = report.provenance?.source.ref ?? "source-fix";
+  const sourceCommit = report.provenance?.source.commitSha
+    ?? safeText(bobEvidence.sourceAnalysis.sourceCommit, "unknown");
   const targetBaseRef = safeText(bobEvidence.targetAnalysis.targetRef, "release branch");
+  const targetRef = report.provenance?.target.ref ?? report.branch;
+  const targetCommit = report.provenance?.target.commitSha ?? report.commitSha;
   const sameProof = report.repair
     ? report.repair.before?.proofHash === report.repair.after?.proofHash
     : report.evidence?.executableProof.integrityValid;
@@ -36,12 +40,12 @@ export function ReportContent({ payload }: { payload: DemoReportResponse }) {
       <section className="panel provenance-panel">
         <SectionHeading eyebrow="Provenance" title="Source intent → release target" action={sameProof ? <StatusPill status="PASS" label="SAME PROOF VERIFIED" /> : undefined} />
         <div className="provenance-flow">
-          <div><span>Source fix</span><strong>source-fix</strong><code title={sourceCommit}>{shortHash(sourceCommit, 16)}</code></div>
+          <div><span>Source ref</span><strong>{sourceRef}</strong><code title={sourceCommit}>{shortHash(sourceCommit, 16)}</code></div>
           <b aria-hidden="true">→</b>
-          <div><span>Target branch · based on {targetBaseRef}</span><strong>{report.branch}</strong><code title={report.commitSha}>{shortHash(report.commitSha, 16)}</code></div>
+          <div><span>Target ref{report.provenance ? "" : ` · based on ${targetBaseRef}`}</span><strong>{targetRef}</strong><code title={targetCommit}>{shortHash(targetCommit, 16)}</code></div>
         </div>
         <div className="provenance-facts">
-          <span>Fixture <code>{report.fixture}</code></span>
+          <span>{report.provenance ? "Repository" : "Fixture"} <code>{report.provenance?.repository ?? report.fixture}</code></span>
           <span>Started <time>{new Date(report.startedAt).toLocaleString()}</time></span>
           <span>Total wall time <code>{formatDuration(new Date(report.completedAt).getTime() - new Date(report.startedAt).getTime())}</code></span>
         </div>

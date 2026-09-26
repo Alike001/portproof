@@ -47,6 +47,7 @@ async function createTestRepository(): Promise<TestRepository> {
   await git(dir, "add", "src/module.js");
   await git(dir, "commit", "-m", "fix public value");
   const sourceSha = await git(dir, "rev-parse", "HEAD");
+  await git(dir, "branch", "fix/public-value", sourceSha);
   await git(dir, "branch", "release/proven", sourceSha);
 
   await initializeProjectConfig(dir);
@@ -83,7 +84,7 @@ async function createTestRepository(): Promise<TestRepository> {
     dir,
     contractPath,
     metadataPath,
-    sourceRef: sourceSha,
+    sourceRef: "fix/public-value",
     brokenTarget: "release/custom",
     provenTarget: "release/proven",
   };
@@ -120,9 +121,11 @@ describe("repository-oriented verification", () => {
 
   it("accepts an arbitrary repository path and resolves source and target refs", () => {
     expect(broken.provenance?.repository).toMatch(/^portproof-generic-test-/);
+    expect(broken.provenance?.source.ref).toBe("fix/public-value");
     expect(broken.provenance?.source.commitSha).toMatch(/^[0-9a-f]{40}$/);
     expect(broken.provenance?.target.ref).toBe("release/custom");
     expect(broken.provenance?.target.commitSha).toBe(broken.commitSha);
+    expect("targetRef" in broken).toBe(false);
   });
 
   it("returns NOT_PROVEN for an arbitrary clean-but-wrong target branch", () => {

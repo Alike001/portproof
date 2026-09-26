@@ -100,4 +100,28 @@ describe("web truth boundary", () => {
     expect(html).toContain(proofHash);
     expect(html).toContain("Bob-generated evidence");
   });
+
+  it("renders canonical generic repository provenance before Bob demo fallbacks", () => {
+    const genericReport: BackportProofReport = {
+      ...report,
+      fixture: "repository",
+      branch: "legacy-root-branch",
+      commitSha: "0".repeat(40),
+      provenance: {
+        repository: "independent-repository",
+        source: { ref: "fix/leading-zero", commitSha: "1".repeat(40) },
+        target: { ref: "v4.0.1", commitSha: "2".repeat(40) },
+        test: { command: "npm", args: ["test"] },
+      },
+    };
+    const html = renderToStaticMarkup(
+      <MemoryRouter><ReportContent payload={{ report: genericReport, bobEvidence }} /></MemoryRouter>
+    );
+    expect(html).toContain("independent-repository");
+    expect(html).toContain("fix/leading-zero");
+    expect(html).toContain("v4.0.1");
+    expect(html).toContain("1".repeat(40));
+    expect(html).toContain("2".repeat(40));
+    expect(html).not.toContain("legacy-root-branch");
+  });
 });
