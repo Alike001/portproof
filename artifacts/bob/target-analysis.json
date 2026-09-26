@@ -1,0 +1,92 @@
+{
+  "version": "1",
+  "targetRef": "release/1.x",
+  "targetCommit": "e31c0bc06492759e9aea4e7d4e85f09493d31a23",
+
+  "publicApis": [
+    {
+      "name": "createRequestOptions",
+      "file": "src/request.js",
+      "role": "Sole public API. Accepts an env object and returns an options object with a timeout field derived from env.REQUEST_TIMEOUT_MS."
+    }
+  ],
+
+  "routingPaths": [
+    {
+      "entryPoint": "createRequestOptions",
+      "steps": ["createRequestOptions", "parseLegacyTimeout"],
+      "files": ["src/request.js"],
+      "finding": "createRequestOptions(env) delegates entirely to parseLegacyTimeout(env). parseModernTimeout exists in the module but is not called by createRequestOptions or any exported path."
+    }
+  ],
+
+  "implementationPaths": [
+    {
+      "file": "src/request.js",
+      "symbols": ["parseLegacyTimeout", "parseModernTimeout", "createRequestOptions", "__internal"],
+      "role": "parseLegacyTimeout: reads env.REQUEST_TIMEOUT_MS, returns 5000 if undefined, otherwise returns Number(raw) || 5000 — meaning any falsy numeric result (including 0) falls back to 5000. parseModernTimeout: identical implementation to parseLegacyTimeout; not called by the public API path. createRequestOptions: exported public function; calls parseLegacyTimeout and returns { timeout: <result> }. __internal: exported object exposing both private functions for test/inspection access."
+    }
+  ],
+
+  "testEvidence": [
+    {
+      "file": "test/request.test.js",
+      "test": "uses the default timeout when unset",
+      "whatItChecks": "createRequestOptions({}).timeout === 5000. Verifies the default fallback when REQUEST_TIMEOUT_MS is absent.",
+      "gap": "Does not test REQUEST_TIMEOUT_MS set to '0'. Does not test negative values. Does not test non-numeric strings. Does not exercise parseModernTimeout via createRequestOptions (it is never called). Does not test __internal.parseLegacyTimeout or __internal.parseModernTimeout directly."
+    },
+    {
+      "file": "test/request.test.js",
+      "test": "accepts a positive timeout",
+      "whatItChecks": "createRequestOptions({ REQUEST_TIMEOUT_MS: '2500' }).timeout === 2500. Verifies a valid positive numeric string is parsed and returned as-is.",
+      "gap": "Only covers a single positive integer string. Does not test boundary values, zero, negative integers, floating-point strings, or non-numeric strings."
+    }
+  ],
+
+  "behaviorSurfaceCandidate": {
+    "setupInputs": ["REQUEST_TIMEOUT_MS"],
+    "publicOperation": "createRequestOptions",
+    "observableFields": ["timeout"]
+  },
+
+  "evidence": [
+    {
+      "file": "src/request.js",
+      "symbol": "parseLegacyTimeout",
+      "finding": "Line 5: `return parsed || 5000`. When Number(raw) produces 0 (e.g. raw === '0'), the expression `0 || 5000` evaluates to 5000. Zero therefore falls back to the default."
+    },
+    {
+      "file": "src/request.js",
+      "symbol": "parseModernTimeout",
+      "finding": "Lines 8-12: body is identical to parseLegacyTimeout byte-for-byte. It is exported via __internal but never invoked from createRequestOptions or any other exported function in the file."
+    },
+    {
+      "file": "src/request.js",
+      "symbol": "createRequestOptions",
+      "finding": "Lines 15-19: only parseLegacyTimeout is called. parseModernTimeout is a dead code path from the perspective of the public API."
+    },
+    {
+      "file": "package.json",
+      "symbol": "scripts.test",
+      "finding": "Test runner is `node --test` (Node.js built-in test runner). No external test framework dependency is declared."
+    },
+    {
+      "file": "package.json",
+      "symbol": "type",
+      "finding": "Package type is 'module', so all .js files are treated as ES modules. Imports in the test file use static import syntax consistently with this."
+    }
+  ],
+
+  "architecturalObservations": [
+    "The module exports two private functions via __internal (parseLegacyTimeout, parseModernTimeout) but only parseLegacyTimeout participates in the live execution path through createRequestOptions.",
+    "parseModernTimeout is syntactically identical to parseLegacyTimeout and is reachable only through __internal; it is not wired into the public API.",
+    "The || 5000 fallback in both private functions collapses any falsy Number result — including 0 — to the default value of 5000.",
+    "No external dependencies are declared in package.json; the module is entirely self-contained."
+  ],
+
+  "uncertainties": [
+    "The intended semantics of REQUEST_TIMEOUT_MS=0 are not established by any of the three allowed files. The test suite does not cover zero. Whether zero is intended to mean 'no timeout', 'immediate timeout', or 'use default' cannot be determined from the allowed evidence alone.",
+    "The purpose of parseModernTimeout — and whether it is intended to eventually replace parseLegacyTimeout in createRequestOptions — is not stated in any of the three allowed files.",
+    "Whether the __internal export is intended for testing, for conditional use by callers, or as a migration artefact is not documented in the allowed files."
+  ]
+}
