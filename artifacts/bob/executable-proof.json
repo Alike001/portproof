@@ -1,0 +1,13 @@
+{
+  "version": "1",
+  "contractId": "create-request-options-zero-timeout",
+  "language": "javascript",
+  "file": "artifacts/bob/proofs/request-timeout-zero.proof.mjs",
+  "publicBoundary": {
+    "module": "src/request.js",
+    "export": "createRequestOptions"
+  },
+  "expected": {
+    "timeout": 0
+  }
+}
