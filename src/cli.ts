@@ -4,6 +4,8 @@
  *
  * Usage:
  *   portproof verify --fixture <name> --branch <branch> [--keep-workspace]
+ *   portproof verify --fixture <name> --branch <branch>
+ *     --contract <path> --proof-metadata <path>
  *
  * Exit codes:
  *   0  PROVEN
@@ -79,12 +81,26 @@ program
   .description("Verify whether a target branch demonstrates the source fix's behavioral intent")
   .requiredOption("--fixture <name>", "Fixture to verify (e.g. semantic-backport)")
   .requiredOption("--branch <branch>", "Target branch to verify")
+  .option("--contract <path>", "BehaviorContract JSON candidate")
+  .option("--proof-metadata <path>", "ExecutableProof metadata JSON")
   .option("--keep-workspace", "Keep the temporary workspace after the run (for debugging)")
-  .action(async (opts: { fixture: string; branch: string; keepWorkspace: boolean }) => {
+  .action(async (opts: {
+    fixture: string;
+    branch: string;
+    contract?: string;
+    proofMetadata?: string;
+    keepWorkspace: boolean;
+  }) => {
     const options: VerifyOptions = {
       fixture: opts.fixture,
       branch: opts.branch,
       keepWorkspace: opts.keepWorkspace,
+      ...(opts.contract !== undefined && {
+        contractPath: resolve(REPO_ROOT, opts.contract),
+      }),
+      ...(opts.proofMetadata !== undefined && {
+        proofMetadataPath: resolve(REPO_ROOT, opts.proofMetadata),
+      }),
     };
 
     let scenario;

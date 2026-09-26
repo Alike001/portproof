@@ -40,6 +40,30 @@ export interface ProofIntegrityRecord {
   proofHash: string;
 }
 
+/** Schema-validated metadata describing a Bob-generated JavaScript proof. */
+export interface ExecutableProof {
+  version: "1";
+  contractId: string;
+  language: "javascript";
+  file: string;
+  publicBoundary: {
+    module: string;
+    export: string;
+  };
+  expected: unknown;
+}
+
+/** Evidence that the exact Bob proof stayed frozen through execution. */
+export interface ExecutableProofEvidence {
+  file: string;
+  publicBoundary: ExecutableProof["publicBoundary"];
+  sourceProofHash: string;
+  copiedProofHash: string | null;
+  preExecutionProofHash: string | null;
+  postExecutionProofHash: string | null;
+  integrityValid: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Process execution result
 // ---------------------------------------------------------------------------
@@ -131,6 +155,15 @@ export interface BackportProofReport {
   /** Present only when both contract and proof fingerprints were created. */
   integrity?: ProofIntegrityRecord;
 
+  /** Validated Bob artifacts and their deterministic integrity evidence. */
+  evidence?: {
+    contract: {
+      id: string;
+      hash: string;
+    };
+    executableProof: ExecutableProofEvidence;
+  };
+
   /** Final deterministic verdict. */
   verdict: Verdict;
 
@@ -153,6 +186,9 @@ export interface BackportProofReport {
 export interface ScenarioAdapter {
   /** Human-readable name, e.g. "semantic-backport". */
   readonly name: string;
+
+  /** Root used to constrain Bob artifact paths. */
+  readonly repositoryRoot: string;
 
   /**
    * Path to the Git bundle file, relative to the repository root.
@@ -193,6 +229,10 @@ export interface ScenarioAdapter {
 export interface VerifyOptions {
   fixture: string;
   branch: string;
+  /** Explicit BehaviorContract candidate path for Bob-artifact verification. */
+  contractPath?: string;
+  /** Explicit ExecutableProof metadata path for Bob-artifact verification. */
+  proofMetadataPath?: string;
   /** When true, skip workspace cleanup after the run (for debugging). */
   keepWorkspace?: boolean;
 }

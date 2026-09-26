@@ -3,8 +3,7 @@
  *
  * This is the only module that knows:
  *  - the bundle path
- *  - the expected timeout value (0)
- *  - how to parse the proof's stdout for the observed value
+ *  - how legacy and Bob proofs encode the observed timeout value
  *
  * The generic verification engine (verify.ts) does NOT contain
  * any fixture-specific logic.
@@ -14,22 +13,25 @@ import { join } from "node:path";
 import type { ScenarioAdapter } from "../core/types.js";
 
 /**
- * Expected output line from the proof script:
+ * Expected legacy output line from the fixture proof script:
  *   Public behavior proof: REQUEST_TIMEOUT_MS=0 => timeout <observed>
+ *
+ * Bob proof output is mapped to the contract-shaped { timeout: number } value.
  */
 const PROOF_OUTPUT_PATTERN = /REQUEST_TIMEOUT_MS=0 => timeout (\d+)/;
+const BOB_PROOF_OUTPUT_PATTERN = /PORTPROOF_OBSERVED timeout=(\d+)/;
 
 export class SemanticBackportAdapter implements ScenarioAdapter {
   readonly name = "semantic-backport";
 
-  constructor(private readonly repoRoot: string) {}
+  constructor(readonly repositoryRoot: string) {}
 
   get bundlePath(): string {
-    return join(this.repoRoot, "fixtures", "semantic-backport-fixture.bundle");
+    return join(this.repositoryRoot, "fixtures", "semantic-backport-fixture.bundle");
   }
 
   get contractPath(): string {
-    return join(this.repoRoot, "fixtures", "contracts", "semantic-backport.json");
+    return join(this.repositoryRoot, "fixtures", "contracts", "semantic-backport.json");
   }
 
   proofFilePath(workspaceDir: string): string {
@@ -46,11 +48,14 @@ export class SemanticBackportAdapter implements ScenarioAdapter {
     return { command: "node", args: ["proof/public-behavior-proof.js"] };
   }
 
-  /**
-   * Parse the observed timeout value from the proof's stdout.
-   * Returns null if the output does not match the expected pattern.
-   */
-  parseObserved(stdout: string): number | null {
+  /** Parse the fixture's legacy or Bob observation protocol. */
+  parseObserved(stdout: string): number | { timeout: number } | null {
+    const bobMatch = BOB_PROOF_OUTPUT_PATTERN.exec(stdout);
+    if (bobMatch?.[1]) {
+      const timeout = parseInt(bobMatch[1], 10);
+      return Number.isFinite(timeout) ? { timeout } : null;
+    }
+
     const match = PROOF_OUTPUT_PATTERN.exec(stdout);
     if (!match?.[1]) return null;
     const parsed = parseInt(match[1], 10);

@@ -106,8 +106,13 @@ export function hashBehaviorContract(contract: BehaviorContract): string {
   return createHash("sha256").update(canonicalSerialize(contract), "utf8").digest("hex");
 }
 
+/** Hash exact bytes using SHA-256. */
+export function hashBytes(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
 /** Hash the exact bytes of an executable proof artifact using SHA-256. */
 export async function hashProofFile(path: string): Promise<string> {
   const bytes = await readFile(path);
-  return createHash("sha256").update(bytes).digest("hex");
+  return hashBytes(bytes);
 }
