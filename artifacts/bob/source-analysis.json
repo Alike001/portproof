@@ -1,0 +1,89 @@
+{
+  "version": "1",
+  "sourceRef": "source-fix",
+  "sourceCommit": "49bbeb3aced30db0b8d7b9f9a6125d33983a05a1",
+  "intent": "When REQUEST_TIMEOUT_MS is set to '0', createRequestOptions must return a timeout value of 0 (disabling the timeout), not fall back to the default of 5000.",
+
+  "affectedPublicApis": [
+    "createRequestOptions"
+  ],
+
+  "implementationPaths": [
+    {
+      "file": "src/request.js",
+      "symbols": ["createRequestOptions", "parseModernTimeout"],
+      "role": "createRequestOptions is the sole public export that surfaces timeout configuration. It calls parseModernTimeout to resolve REQUEST_TIMEOUT_MS from the environment. The fix corrects parseModernTimeout's zero-handling: the old expression `parsed || 5000` treats numeric zero as falsy and returns 5000; the corrected expression `Number.isFinite(parsed) ? parsed : 5000` preserves zero."
+    }
+  ],
+
+  "regressionEvidence": [
+    {
+      "file": "test/modern-timeout-zero.test.js",
+      "test": "modern timeout parser accepts zero to disable timeout",
+      "whatItChecks": "Calls __internal.parseModernTimeout({ REQUEST_TIMEOUT_MS: '0' }) directly and asserts the return value is 0.",
+      "limitation": "This test imports and exercises __internal.parseModernTimeout — an internal helper exposed via the __internal escape hatch — NOT through the public createRequestOptions function. It does not exercise the production routing path. A target branch that cherry-picks only this fix but still routes createRequestOptions through parseLegacyTimeout (which retains the `parsed || 5000` bug) will pass this test while the observable public behavior remains broken. The regression test does not prove the fix is wired into the public execution path."
+    },
+    {
+      "file": "test/request.test.js",
+      "test": "uses the default timeout when unset",
+      "whatItChecks": "Calls createRequestOptions({}) through the public API and asserts timeout === 5000.",
+      "limitation": "Tests only the default (unset) case. Does not test REQUEST_TIMEOUT_MS=0."
+    },
+    {
+      "file": "test/request.test.js",
+      "test": "accepts a positive timeout",
+      "whatItChecks": "Calls createRequestOptions({ REQUEST_TIMEOUT_MS: '2500' }) through the public API and asserts timeout === 2500.",
+      "limitation": "Tests only a positive non-zero value. The falsy-zero bug does not surface here; this test would pass even with the buggy `parsed || 5000` expression."
+    }
+  ],
+
+  "observableCandidate": {
+    "setup": {
+      "REQUEST_TIMEOUT_MS": "0"
+    },
+    "operation": "Call createRequestOptions({ REQUEST_TIMEOUT_MS: '0' }) via the public export from src/request.js and read the returned .timeout field.",
+    "expected": {
+      "timeout": 0
+    }
+  },
+
+  "evidence": [
+    {
+      "file": "src/request.js",
+      "symbol": "parseModernTimeout",
+      "finding": "The source fix changes line 12 from `return parsed || 5000` to `return Number.isFinite(parsed) ? parsed : 5000`. The old expression returns 5000 when parsed is 0 because 0 is falsy in JavaScript. The new expression preserves 0 as a valid return value."
+    },
+    {
+      "file": "src/request.js",
+      "symbol": "createRequestOptions",
+      "finding": "On the source-fix commit (after the preceding routing refactor at df135a3), createRequestOptions calls parseModernTimeout(env), not parseLegacyTimeout(env). parseLegacyTimeout at line 5 still contains `return parsed || 5000` and is not fixed. The routing decision is therefore the critical dependency: only a branch where createRequestOptions calls parseModernTimeout will benefit from the fix."
+    },
+    {
+      "file": "src/request.js",
+      "symbol": "__internal",
+      "finding": "Both parseLegacyTimeout and parseModernTimeout are exposed via the __internal named export. This escape hatch is the import target of the regression test, meaning the regression test bypasses the routing path entirely."
+    },
+    {
+      "file": "test/modern-timeout-zero.test.js",
+      "symbol": "modern timeout parser accepts zero to disable timeout",
+      "finding": "Imports from __internal, not from the public createRequestOptions export. This is an internal-function test, not a public-path test. It will pass on any branch where parseModernTimeout is correctly defined, regardless of whether createRequestOptions actually calls it."
+    },
+    {
+      "file": "proof/public-behavior-proof.js",
+      "symbol": null,
+      "finding": "Imports createRequestOptions (public export) and asserts createRequestOptions({ REQUEST_TIMEOUT_MS: '0' }).timeout === 0. This is the only artifact in the source checkout that exercises the full routing path (environment → createRequestOptions → parseModernTimeout → zero handling) and asserts the observable output. It is not a test-runner test; it is a standalone Node script run via `npm run proof`."
+    },
+    {
+      "file": "SOURCE_FIX_INTENT.md",
+      "symbol": null,
+      "finding": "Documents: 'setting REQUEST_TIMEOUT_MS=0 should disable request timeouts, but the parser falls back to 5000 because JavaScript treats numeric zero as falsy.' and 'The source branch currently routes request creation through parseModernTimeout.' Confirms both the behavioral intent and the routing dependency."
+    },
+    {
+      "file": "package.json",
+      "symbol": null,
+      "finding": "Defines two scripts: `test` runs `node --test` (executes all files under test/) and `proof` runs `node proof/public-behavior-proof.js`. The proof script is the public-path behavioral check; the test script only exercises the files in test/, which includes the internal-only regression test."
+    }
+  ],
+
+  "uncertainties": []
+}
