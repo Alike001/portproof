@@ -94,6 +94,7 @@ program
       console.log(`Created ${relative(process.cwd(), path) || path}`);
       console.log("Next: open the repository in IBM Bob with portproof-verifier mode and the semantic-backport Skill.");
       console.log("Generate SourceAnalysis, TargetAnalysis, BehaviorContract, TargetMapping, and ExecutableProof artifacts.");
+      console.log("If the target needs dependencies or compilation, add explicit ordered prepare commands to .portproof/project.json.");
       console.log("Then run portproof verify-repo with the source ref, target ref, contract, and proof metadata.");
     } catch (error) {
       console.error(`Error: ${String(error)}`);

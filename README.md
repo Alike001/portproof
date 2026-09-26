@@ -47,6 +47,25 @@ This creates `.portproof/project.json` with a shell-free test command:
 }
 ```
 
+The default stays minimal and runs no setup. Repositories that need dependencies or compiled runtime output must explicitly add ordered, user-owned preparation commands:
+
+```json
+{
+  "version": "1",
+  "language": "javascript",
+  "prepare": [
+    { "command": "npm", "args": ["ci"] },
+    { "command": "npm", "args": ["run", "build"] }
+  ],
+  "test": {
+    "command": "npm",
+    "args": ["test"]
+  }
+}
+```
+
+PortProof runs these commands in order with shell execution disabled and stops on the first failure. Preparation runs only in the isolated target checkout. Generated untracked or ignored files are allowed, but any change to tracked files makes the run `UNVERIFIABLE`.
+
 Open the repository in IBM Bob using the `portproof-verifier` mode and `semantic-backport` Skill. Bob investigates the source and target independently and generates SourceAnalysis, TargetAnalysis, BehaviorContract, TargetMapping, and ExecutableProof artifacts. Then run:
 
 ```sh
@@ -58,7 +77,7 @@ npm run portproof -- verify-repo \
   --proof-metadata /path/to/repository/artifacts/executable-proof.json
 ```
 
-PortProof resolves both refs, clones the target commit into a temporary checkout, runs the configured test executable with its argument array, validates the proof's declared public import, copies its exact bytes without rewriting, and records source/copy/pre/post SHA-256 hashes. The supplied repository is not checked out or modified by verification.
+PortProof resolves both refs, clones the target commit into a temporary checkout, runs configured preparation, validates the proof's declared public import against the prepared checkout, runs the test executable with its argument array, copies the proof's exact bytes without rewriting, and records source/copy/pre/post SHA-256 hashes. The supplied repository is not checked out or modified by verification.
 
 ## Trust boundary
 
@@ -67,7 +86,7 @@ IBM Bob proposes structured evidence and, when requested, a repair. Deterministi
 - strict Zod schema validation;
 - Git ref and commit provenance;
 - JavaScript/TypeScript static public-boundary validation;
-- isolated test and proof execution without a shell;
+- isolated preparation, test, and proof execution without a shell;
 - contract and proof integrity hashes;
 - the final machine verdict.
 
@@ -75,9 +94,9 @@ Bob never assigns the final verdict. Malformed evidence, missing refs, unsupport
 
 ## Current scope
 
-The current adapter supports local Git repositories containing JavaScript or TypeScript projects whose target tests can be invoked as one executable plus an argument array. Proofs execute with Node and must statically import and invoke the declared repository-relative public boundary.
+The current adapter supports local Git repositories containing JavaScript or TypeScript projects whose preparation and target tests can be invoked as executables plus argument arrays. Proofs execute with Node and must statically import and invoke the declared repository-relative public boundary. Preparation is trusted only from the local `.portproof/project.json`; Bob artifacts cannot define commands.
 
-PortProof does not currently provide adapters for Python, Go, Rust, Java, remote repository execution, dependency setup commands, or universal API correctness. The `LanguageAdapter` boundary isolates public-proof validation and observation parsing so future languages can be added without weakening the deterministic core.
+PortProof does not currently provide adapters for Python, Go, Rust, Java, remote repository execution, automatic setup inference, or universal API correctness. The `LanguageAdapter` boundary isolates public-proof validation and observation parsing so future languages can be added without weakening the deterministic core.
 
 The original prepared commands remain available:
 

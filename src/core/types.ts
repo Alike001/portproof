@@ -79,7 +79,18 @@ export interface CommandSpec {
 export interface PortProofProjectConfig {
   version: "1";
   language: "javascript";
+  prepare?: CommandSpec[] | undefined;
   test: CommandSpec;
+}
+
+/** Measured result of one user-owned repository preparation command. */
+export type PreparationCommandResult = ExistingTestsResult;
+
+/** Deterministic preparation history for repository-oriented verification. */
+export interface PreparationResult {
+  commands: PreparationCommandResult[];
+  passed: boolean;
+  trackedFilesUnchanged: boolean;
 }
 
 /** User-selected repository and refs for repository-oriented verification. */
@@ -247,6 +258,9 @@ export interface BackportProofReport {
 
   /** Present for repository-oriented verification runs. */
   provenance?: RepositoryProvenance;
+
+  /** Present when repository preparation was evaluated in an isolated checkout. */
+  preparation?: PreparationResult;
 
   mechanical: {
     existingTests: ExistingTestsResult;

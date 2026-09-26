@@ -1,30 +1,43 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { z } from "zod";
-import type { PortProofProjectConfig } from "./types.js";
+import type { CommandSpec, PortProofProjectConfig } from "./types.js";
 
 const nonBlank = (field: string) =>
   z.string().refine((value) => value.trim().length > 0, {
     message: `${field} must be a non-empty string`,
   });
 
+const shellOperators = new Set(["&&", "||", ";", "|", "&", ">", "<"]);
+const shellExecutables = new Set(["sh", "bash", "zsh", "fish", "cmd", "cmd.exe", "powershell", "pwsh"]);
+
+const commandSpecSchema: z.ZodType<CommandSpec> = z.strictObject({
+  command: nonBlank("command")
+    .refine((value) => !value.includes("\0"), {
+      message: "command must not contain NUL bytes",
+    })
+    .refine((value) => !/\s/.test(value), {
+      message: "command must contain one executable; put command arguments in args",
+    }),
+  args: z.array(z.string().refine(
+    (value) => !value.includes("\0") && !shellOperators.has(value.trim()),
+    { message: "arguments must not contain NUL bytes or shell control operators" }
+  )),
+}).refine(
+  ({ command, args }) => {
+    const executable = command.replaceAll("\\", "/").split("/").at(-1)?.toLowerCase() ?? "";
+    return !(shellExecutables.has(executable) && args.some((arg) => arg === "-c" || arg === "/c"));
+  },
+  { message: "shell command strings are not supported; use explicit executable and args entries" }
+);
+
 export const projectConfigSchema: z.ZodType<PortProofProjectConfig> = z.strictObject({
   version: z.literal("1"),
   language: z.literal("javascript", {
     error: "language must be javascript; no other adapter ships in this release",
   }),
-  test: z.strictObject({
-    command: nonBlank("test.command")
-      .refine((value) => !value.includes("\0"), {
-        message: "test.command must not contain NUL bytes",
-      })
-      .refine((value) => !/\s/.test(value), {
-        message: "test.command must contain one executable; put command arguments in test.args",
-      }),
-    args: z.array(z.string().refine((value) => !value.includes("\0"), {
-      message: "test arguments must not contain NUL bytes",
-    })),
-  }),
+  prepare: z.array(commandSpecSchema).optional(),
+  test: commandSpecSchema,
 });
 
 export const DEFAULT_PROJECT_CONFIG: PortProofProjectConfig = {

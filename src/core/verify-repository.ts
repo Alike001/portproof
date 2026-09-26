@@ -9,6 +9,7 @@ import {
 } from "./executable-proof.js";
 import { safeCleanup } from "./fixture.js";
 import { loadProjectConfig } from "./project-config.js";
+import { prepareRepository } from "./preparation.js";
 import { createRepositoryWorkspace, inspectRepository } from "./repository.js";
 import { generateRunId } from "./report.js";
 import { runProcess } from "./runner.js";
@@ -19,6 +20,7 @@ import type {
   ExecutableProofEvidence,
   ExistingTestsResult,
   PortProofProjectConfig,
+  PreparationResult,
   RepositoryProvenance,
   SemanticProofResult,
   VerifyRepositoryOptions,
@@ -101,6 +103,7 @@ function unverifiable(params: {
   tests?: ExistingTestsResult;
   proof?: SemanticProofResult;
   workspace?: WorkspaceStatusResult;
+  preparation?: PreparationResult;
 }): BackportProofReport {
   const expected = params.contract?.value.observable.expected ?? null;
   return {
@@ -111,6 +114,7 @@ function unverifiable(params: {
     startedAt: params.startedAt,
     completedAt: new Date().toISOString(),
     ...(params.provenance !== undefined && { provenance: params.provenance }),
+    ...(params.preparation !== undefined && { preparation: params.preparation }),
     mechanical: {
       existingTests: params.tests ?? unavailableTest(params.config, params.reason),
       ...(params.workspace !== undefined && { workspace: params.workspace }),
@@ -239,6 +243,7 @@ export async function verifyRepository(
 
   let workspaceDir: string | undefined;
   let workspaceStatus: WorkspaceStatusResult | undefined;
+  const runState: { preparation?: PreparationResult } = {};
   const hashes: HashLifecycle = {};
   const evidence = (): NonNullable<BackportProofReport["evidence"]> => ({
     contract: { id: contract.id, hash: contractHash },
@@ -262,6 +267,7 @@ export async function verifyRepository(
       ...(tests !== undefined && { tests }),
       ...(proof !== undefined && { proof }),
       ...(workspaceStatus !== undefined && { workspace: workspaceStatus }),
+      ...(runState.preparation !== undefined && { preparation: runState.preparation }),
     });
   };
 
@@ -271,6 +277,19 @@ export async function verifyRepository(
     workspaceStatus = workspace.status;
   } catch (error) {
     return fail(`Isolated target checkout failed: ${safeError(error, [[repositoryRoot, provenance.repository]])}`);
+  }
+
+  const preparationExecution = await prepareRepository(
+    workspaceDir,
+    provenance.target.commitSha,
+    config.prepare ?? []
+  );
+  const preparation = preparationExecution.result;
+  runState.preparation = preparation;
+  if (!preparation.passed) {
+    return fail(
+      preparationExecution.failureReason ?? "Repository preparation integrity could not be established"
+    );
   }
 
   const copiedProofPath = join(workspaceDir, COPIED_PROOF_FILENAME);
@@ -359,6 +378,7 @@ export async function verifyRepository(
     startedAt,
     completedAt: new Date().toISOString(),
     provenance,
+    preparation,
     mechanical: { existingTests: tests, workspace: workspaceStatus },
     semantic: { proof },
     contract: contractArtifact,

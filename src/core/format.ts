@@ -105,6 +105,25 @@ export function formatReport(report: BackportProofReport): string {
   lines.push(row("Commit", dim(report.commitSha.slice(0, 12))));
   lines.push(row("Run ID", dim(report.runId)));
 
+  if (report.preparation) {
+    lines.push("");
+    lines.push(bold("PREPARATION"));
+    if (report.preparation.commands.length === 0) {
+      lines.push(row("Commands", dim("none configured")));
+    } else {
+      report.preparation.commands.forEach((command, index) => {
+        lines.push(row(
+          `Command ${String(index + 1)}`,
+          `${passToken(command.passed)}  ${command.command} ${command.args.join(" ")}  ${dim(String(command.durationMs) + "ms")}`
+        ));
+      });
+    }
+    lines.push(row(
+      "Tracked files",
+      report.preparation.trackedFilesUnchanged ? green("UNCHANGED") : red("MODIFIED")
+    ));
+  }
+
   // ── MECHANICAL ──────────────────────────────────────────────────────────
   lines.push("");
   lines.push(bold("MECHANICAL"));
