@@ -18,6 +18,22 @@
 /** The three machine-verifiable verdict states. */
 export type Verdict = "PROVEN" | "NOT_PROVEN" | "UNVERIFIABLE";
 
+/** Real execution boundaries exposed to non-authoritative presentation layers. */
+export type VerificationPhase =
+  | "PREPARING"
+  | "VALIDATING_CONTRACT"
+  | "FREEZING_PROOF"
+  | "VALIDATING_PUBLIC_BOUNDARY"
+  | "CHECKING_TESTS"
+  | "RUNNING_PROOF";
+
+export type RepairPhase =
+  | "VALIDATING_PATCH"
+  | "VERIFYING_BEFORE_STATE"
+  | "APPLYING_REPAIR"
+  | "RUNNING_TESTS"
+  | "REVERIFYING_FROZEN_PROOF";
+
 // ---------------------------------------------------------------------------
 // Behavior contract and proof integrity
 // ---------------------------------------------------------------------------
@@ -95,6 +111,9 @@ export interface RepairStageRecord {
   observed: unknown;
   proofHash: string;
   contractHash: string;
+  existingTestsDurationMs: number;
+  proofDurationMs: number;
+  proofExitCode: number | null;
 }
 
 export interface RepairReportDetails {
@@ -149,6 +168,17 @@ export interface ExistingTestsResult {
   stderr: string;
 }
 
+/** Deterministic cleanliness check for the isolated target checkout. */
+export interface WorkspaceStatusResult {
+  command: "git";
+  args: string[];
+  exitCode: number | null;
+  clean: boolean;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+}
+
 /** Result of running the semantic behavior proof. */
 export interface SemanticProofResult {
   command: string;
@@ -188,6 +218,7 @@ export interface BackportProofReport {
 
   mechanical: {
     existingTests: ExistingTestsResult;
+    workspace?: WorkspaceStatusResult;
   };
 
   semantic: {
@@ -289,6 +320,8 @@ export interface VerifyOptions {
   proofMetadataPath?: string;
   /** When true, skip workspace cleanup after the run (for debugging). */
   keepWorkspace?: boolean;
+  /** Optional observer for real core execution boundaries; never controls verdicts. */
+  onPhase?: (phase: VerificationPhase) => void;
 }
 
 export interface RepairVerifyOptions {
@@ -299,4 +332,6 @@ export interface RepairVerifyOptions {
   repairProposalPath: string;
   patchPath: string;
   keepWorkspace?: boolean;
+  /** Optional observer for real repair execution boundaries; never controls verdicts. */
+  onPhase?: (phase: RepairPhase) => void;
 }

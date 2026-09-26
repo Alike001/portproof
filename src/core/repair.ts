@@ -112,6 +112,8 @@ async function runFrozenProofStage(params: {
   sourceProofBytes: Buffer;
   sourceProofHash: string;
   existingTestFailureVerdict: Verdict;
+  onTestsStarting?: () => void;
+  onProofStarting?: () => void;
 }): Promise<FrozenProofStage> {
   const copiedProofPath = join(params.workspaceDir, COPIED_PROOF_FILENAME);
   let copiedProofHash = "";
@@ -130,6 +132,7 @@ async function runFrozenProofStage(params: {
 
     const { command: testCommand, args: testArgs } =
       params.scenario.existingTestCommand(params.workspaceDir);
+    params.onTestsStarting?.();
     const testProcess = await runProcess(testCommand, testArgs, {
       cwd: params.workspaceDir,
     });
@@ -151,6 +154,7 @@ async function runFrozenProofStage(params: {
       );
     }
 
+    params.onProofStarting?.();
     const proofProcess = await runProcess("node", [COPIED_PROOF_FILENAME], {
       cwd: params.workspaceDir,
     });
@@ -198,6 +202,9 @@ async function runFrozenProofStage(params: {
         observed: semanticProof.observed,
         proofHash: params.sourceProofHash,
         contractHash: params.contractHash,
+        existingTestsDurationMs: existingTests.durationMs,
+        proofDurationMs: semanticProof.durationMs,
+        proofExitCode: semanticProof.exitCode,
       },
     };
   } finally {
@@ -369,6 +376,7 @@ export async function verifyRepair(
   };
 
   try {
+    options.onPhase?.("VALIDATING_PATCH");
     contract = await loadBehaviorContract(options.contractPath);
     contractHash = hashBehaviorContract(contract);
 
@@ -410,6 +418,7 @@ export async function verifyRepair(
     }
     await requireCleanWorkspace(workspaceDir, "Initial");
 
+    options.onPhase?.("VERIFYING_BEFORE_STATE");
     beforeStage = await runFrozenProofStage({
       scenario,
       workspaceDir,
@@ -438,6 +447,7 @@ export async function verifyRepair(
     await requireCleanWorkspace(workspaceDir, "Pre-apply");
     await requireRegularFiles(workspaceDir, changedPaths);
 
+    options.onPhase?.("APPLYING_REPAIR");
     await requireGitSuccess(
       "git apply --check",
       ["apply", "--check", "--whitespace=error-all", "-"],
@@ -517,6 +527,8 @@ export async function verifyRepair(
       sourceProofBytes,
       sourceProofHash,
       existingTestFailureVerdict: "NOT_PROVEN",
+      onTestsStarting: () => options.onPhase?.("RUNNING_TESTS"),
+      onProofStarting: () => options.onPhase?.("REVERIFYING_FROZEN_PROOF"),
     });
 
     const diffAfterAfter = await requireGitSuccess(

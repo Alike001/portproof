@@ -37,6 +37,7 @@ import type {
   SemanticProofResult,
   Verdict,
   VerifyOptions,
+  WorkspaceStatusResult,
 } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -121,6 +122,7 @@ export async function verify(
   scenario: ScenarioAdapter,
   options: VerifyOptions
 ): Promise<BackportProofReport> {
+  options.onPhase?.("PREPARING");
   const hasContract = options.contractPath !== undefined;
   const hasProofMetadata = options.proofMetadataPath !== undefined;
 
@@ -204,6 +206,19 @@ async function verifyLegacy(
     });
   }
 
+  const gitStatusProcess = await runProcess("git", ["status", "--porcelain=v1"], {
+    cwd: workspaceDir,
+  });
+  const workspaceStatus: WorkspaceStatusResult = {
+    command: "git",
+    args: ["status", "--porcelain=v1"],
+    exitCode: gitStatusProcess.exitCode,
+    clean: gitStatusProcess.exitCode === 0 && gitStatusProcess.stdout.length === 0,
+    durationMs: gitStatusProcess.durationMs,
+    stdout: gitStatusProcess.stdout,
+    stderr: gitStatusProcess.stderr,
+  };
+
   // ------------------------------------------------------------------
   // 3. Fingerprint the exact executable proof bytes
   // ------------------------------------------------------------------
@@ -285,7 +300,7 @@ async function verifyLegacy(
     commitSha,
     startedAt,
     completedAt,
-    mechanical: { existingTests },
+    mechanical: { existingTests, workspace: workspaceStatus },
     semantic: { proof: semanticProof },
     contract: contractArtifact,
     integrity,
@@ -345,6 +360,7 @@ async function verifyBobArtifacts(
   let contract: BehaviorContract;
   let contractHash: string;
   try {
+    options.onPhase?.("VALIDATING_CONTRACT");
     contract = await loadBehaviorContract(options.contractPath);
     contractHash = hashBehaviorContract(contract);
   } catch (error) {
@@ -380,6 +396,7 @@ async function verifyBobArtifacts(
   let sourceProofBytes: Buffer;
   let sourceProofHash: string;
   try {
+    options.onPhase?.("FREEZING_PROOF");
     const artifact = await loadProofArtifact(scenario.repositoryRoot, metadata.file);
     sourceProofBytes = artifact.bytes;
     sourceProofHash = artifact.sourceProofHash;
@@ -444,6 +461,22 @@ async function verifyBobArtifacts(
     return fail(reason);
   }
 
+  const gitStatusProcess = await runProcess("git", ["status", "--porcelain=v1"], {
+    cwd: workspaceDir,
+  });
+  const workspaceStatus: WorkspaceStatusResult = {
+    command: "git",
+    args: ["status", "--porcelain=v1"],
+    exitCode: gitStatusProcess.exitCode,
+    clean: gitStatusProcess.exitCode === 0 && gitStatusProcess.stdout.length === 0,
+    durationMs: gitStatusProcess.durationMs,
+    stdout: gitStatusProcess.stdout,
+    stderr: gitStatusProcess.stderr,
+  };
+  if (gitStatusProcess.exitCode !== 0) {
+    return fail("Isolated target checkout Git status could not be established");
+  }
+
   const copiedProofPath = join(workspaceDir, COPIED_PROOF_FILENAME);
   try {
     await writeFile(copiedProofPath, sourceProofBytes, { flag: "wx" });
@@ -457,12 +490,14 @@ async function verifyBobArtifacts(
   }
 
   try {
+    options.onPhase?.("VALIDATING_PUBLIC_BOUNDARY");
     await validatePublicBoundary(copiedProofPath, workspaceDir, metadata);
   } catch (error) {
     return fail(`Executable proof public-boundary validation failed: ${String(error)}`);
   }
 
   const { command: testCmd, args: testArgs } = scenario.existingTestCommand(workspaceDir);
+  options.onPhase?.("CHECKING_TESTS");
   const testProc = await runProcess(testCmd, testArgs, { cwd: workspaceDir });
   const existingTests: ExistingTestsResult = {
     command: testCmd,
@@ -487,6 +522,7 @@ async function verifyBobArtifacts(
     return fail("Pre-execution proof hash does not match the source proof hash", existingTests);
   }
 
+  options.onPhase?.("RUNNING_PROOF");
   const proofProc = await runProcess("node", [COPIED_PROOF_FILENAME], {
     cwd: workspaceDir,
   });
@@ -529,7 +565,7 @@ async function verifyBobArtifacts(
     commitSha,
     startedAt,
     completedAt: new Date().toISOString(),
-    mechanical: { existingTests },
+    mechanical: { existingTests, workspace: workspaceStatus },
     semantic: { proof: semanticProof },
     contract: contractArtifact,
     integrity: { contractHash, proofHash: sourceProofHash },
