@@ -147,12 +147,19 @@ export function DeterministicEvidencePanel({ report }: { report: BackportProofRe
           <p>exit {String(proof.exitCode)} · {formatDuration(proof.durationMs)}</p>
         </article>
       </div>
-      <div className="hash-ledger">
-        <div className="hash-ledger__contract"><span>Contract SHA-256</span><code>{report.contract?.hash ?? "unavailable"}</code></div>
-        {hashRows.map(([label, hash]) => (
-          <div key={label}><span>{label} proof hash</span><code title={hash ?? undefined}>{hash ?? "unavailable"}</code></div>
-        ))}
+      <div className="primary-hash">
+        <span>Proof SHA-256</span>
+        <code>{integrity?.sourceProofHash ?? "unavailable"}</code>
       </div>
+      <details className="disclosure integrity-details">
+        <summary>Inspect contract and proof hash lifecycle</summary>
+        <div className="hash-ledger">
+          <div className="hash-ledger__contract"><span>Contract SHA-256</span><code>{report.contract?.hash ?? "unavailable"}</code></div>
+          {hashRows.map(([label, hash]) => (
+            <div key={label}><span>{label} proof hash</span><code title={hash ?? undefined}>{hash ?? "unavailable"}</code></div>
+          ))}
+        </div>
+      </details>
       <div className="observation-line">
         <span>Expected <strong>{formatValue(proof.expected)}</strong></span>
         <b aria-hidden="true">→</b>
@@ -176,27 +183,30 @@ export function RepairHistory({ report }: { report: BackportProofReport }) {
     repair.before?.proofHash && repair.before.proofHash === repair.after?.proofHash
   );
   return (
-    <section className="panel repair-history">
-      <SectionHeading eyebrow="Deterministic repair history" title="One target change. The exact same proof." action={sameProof ? <StatusPill status="PASS" label="SAME PROOF" /> : <StatusPill status="FAIL" label="HASH MISMATCH" />} />
+    <section className="panel repair-history same-proof-signature">
+      <SectionHeading eyebrow="Same frozen proof" title="The target changed. The proof did not." action={sameProof ? <StatusPill status="PASS" label="UNCHANGED" /> : <StatusPill status="FAIL" label="HASH MISMATCH" />} />
       <div className="repair-comparison">
         <article>
           <span>Before repair</span>
           <StatusPill status={repair.before?.verdict === "NOT_PROVEN" ? "NOT_PROVEN" : "UNVERIFIABLE"} label={repair.before?.verdict.replace("_", " ") ?? "UNAVAILABLE"} />
           <p>Observed <strong>{formatValue(repair.before?.observed)}</strong></p>
           <p className="repair-timing">tests {repair.before ? formatDuration(repair.before.existingTestsDurationMs) : "—"} · proof {repair.before ? formatDuration(repair.before.proofDurationMs) : "—"}</p>
-          <code>{shortHash(repair.before?.proofHash, 20)}</code>
         </article>
-        <div className="repair-patch">
-          <span>Patch SHA-256</span>
-          <code title={repair.patchHash ?? undefined}>{shortHash(repair.patchHash, 20)}</code>
-          <p>{repair.changedPaths.join(", ")}</p>
+        <div className="repair-patch same-proof-hash">
+          <span>Proof SHA-256</span>
+          <code title={repair.before?.proofHash}>{repair.before?.proofHash ?? "unavailable"}</code>
+          <StatusPill status={sameProof ? "PASS" : "FAIL"} label={sameProof ? "UNCHANGED" : "MISMATCH"} />
+          <details className="disclosure">
+            <summary>Patch details</summary>
+            <p><code title={repair.patchHash ?? undefined}>{shortHash(repair.patchHash, 20)}</code></p>
+            <p>{repair.changedPaths.join(", ")}</p>
+          </details>
         </div>
         <article>
           <span>After repair</span>
           <StatusPill status={repair.after?.verdict === "PROVEN" ? "PROVEN" : "NOT_PROVEN"} label={repair.after?.verdict.replace("_", " ") ?? "UNAVAILABLE"} />
           <p>Observed <strong>{formatValue(repair.after?.observed)}</strong></p>
           <p className="repair-timing">tests {repair.after ? formatDuration(repair.after.existingTestsDurationMs) : "—"} · proof {repair.after ? formatDuration(repair.after.proofDurationMs) : "—"}</p>
-          <code>{shortHash(repair.after?.proofHash, 20)}</code>
         </article>
       </div>
     </section>

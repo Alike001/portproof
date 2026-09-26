@@ -23,7 +23,7 @@ export function VerdictStrip({ state, report }: { state: WorkflowState; report: 
         <span className="verdict-cell__label">Existing tests</span>
         {tests ? <StatusPill status={tests.passed ? "PASS" : "FAIL"} /> : <StatusPill status={state === "VERIFYING" ? "RUNNING" : "PENDING"} />}
       </div>
-      <div className="verdict-cell verdict-cell--semantic">
+      <div className={`verdict-cell verdict-cell--semantic ${proof ? (proof.passed ? "verdict-cell--pass" : "verdict-cell--fail") : "verdict-cell--pending"}`}>
         <span className="verdict-cell__label">Semantic proof</span>
         {proof ? <StatusPill status={proof.passed ? "PASS" : "FAIL"} /> : <StatusPill status={state === "VERIFYING" ? "RUNNING" : "PENDING"} />}
       </div>

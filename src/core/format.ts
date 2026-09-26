@@ -93,8 +93,15 @@ export function formatReport(report: BackportProofReport): string {
   lines.push(bold("PORTPROOF"));
   lines.push(separator());
 
-  lines.push(row("Fixture", report.fixture));
-  lines.push(row("Branch", report.branch));
+  if (report.provenance) {
+    lines.push(row("Repository", report.provenance.repository));
+    lines.push(row("Source ref", report.provenance.source.ref));
+    lines.push(row("Source commit", dim(report.provenance.source.commitSha.slice(0, 12))));
+    lines.push(row("Target ref", report.provenance.target.ref));
+  } else {
+    lines.push(row("Fixture", report.fixture));
+    lines.push(row("Branch", report.branch));
+  }
   lines.push(row("Commit", dim(report.commitSha.slice(0, 12))));
   lines.push(row("Run ID", dim(report.runId)));
 

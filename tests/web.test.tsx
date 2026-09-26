@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import type { BackportProofReport } from "../src/core/types.js";
 import { LandingPage } from "../src/web/routes/LandingPage.js";
 import { ReportContent } from "../src/web/routes/ReportPage.js";
+import { VerifyPage } from "../src/web/routes/VerifyPage.js";
 import { initialProofRunState, proofRunReducer } from "../src/web/state/proofRunReducer.js";
 import type { DemoEvidenceBundle } from "../src/web/types.js";
 
@@ -59,6 +60,36 @@ describe("web truth boundary", () => {
     expect(html).toContain("Demo preview · example data");
     expect(html).toContain("NOT PROVEN");
     expect(html.toLowerCase()).not.toContain("confidence");
+    expect(html).toContain("Use PortProof on your repository");
+    expect(html).toContain("portproof verify-repo");
+  });
+
+  it("uses a human-readable demo title with the technical identifier secondary", () => {
+    const html = renderToStaticMarkup(<MemoryRouter initialEntries={["/verify"]}><VerifyPage /></MemoryRouter>);
+    expect(html).toContain("Zero-timeout backport");
+    expect(html).toContain("REQUEST_TIMEOUT_MS=0");
+  });
+
+  it("renders one unchanged frozen-proof signature from repair report data", () => {
+    const repaired: BackportProofReport = {
+      ...report,
+      verdict: "PROVEN",
+      repair: {
+        proposal: { contractId: "create-request-options-zero-timeout", targetRef: "demo-clean-backport", modifiedPaths: ["src/request.js"] },
+        patchHash: "a".repeat(64),
+        baseCommitSha: report.commitSha,
+        applied: true,
+        policyValid: true,
+        changedPaths: ["src/request.js"],
+        before: { verdict: "NOT_PROVEN", existingTestsPassed: true, proofPassed: false, expected: { timeout: 0 }, observed: { timeout: 5000 }, proofHash, contractHash, existingTestsDurationMs: 1, proofDurationMs: 1, proofExitCode: 1 },
+        after: { verdict: "PROVEN", existingTestsPassed: true, proofPassed: true, expected: { timeout: 0 }, observed: { timeout: 0 }, proofHash, contractHash, existingTestsDurationMs: 1, proofDurationMs: 1, proofExitCode: 0 },
+      },
+    };
+    const html = renderToStaticMarkup(<MemoryRouter><ReportContent payload={{ report: repaired, bobEvidence }} /></MemoryRouter>);
+    expect(html).toContain("Same frozen proof");
+    expect(html).toContain("UNCHANGED");
+    expect(html).toContain("Observed <strong>5000</strong>");
+    expect(html).toContain("Observed <strong>0</strong>");
   });
 
   it("renders the report route evidence from a core report", () => {

@@ -69,6 +69,35 @@ export interface ExecutableProof {
   expected: unknown;
 }
 
+/** Shell-free command configuration read from .portproof/project.json. */
+export interface CommandSpec {
+  command: string;
+  args: string[];
+}
+
+/** Versioned repository-local PortProof configuration. */
+export interface PortProofProjectConfig {
+  version: "1";
+  language: "javascript";
+  test: CommandSpec;
+}
+
+/** User-selected repository and refs for repository-oriented verification. */
+export interface RepositoryInput {
+  repositoryPath: string;
+  sourceRef: string;
+  targetRef: string;
+  test: CommandSpec;
+}
+
+/** Safe, reportable Git provenance. Absolute repository paths are excluded. */
+export interface RepositoryProvenance {
+  repository: string;
+  source: { ref: string; commitSha: string };
+  target: { ref: string; commitSha: string };
+  test: CommandSpec;
+}
+
 /** Evidence that the exact Bob proof stayed frozen through execution. */
 export interface ExecutableProofEvidence {
   file: string;
@@ -216,6 +245,9 @@ export interface BackportProofReport {
   /** ISO-8601 timestamp when verification completed. */
   completedAt: string;
 
+  /** Present for repository-oriented verification runs. */
+  provenance?: RepositoryProvenance;
+
   mechanical: {
     existingTests: ExistingTestsResult;
     workspace?: WorkspaceStatusResult;
@@ -334,4 +366,14 @@ export interface RepairVerifyOptions {
   keepWorkspace?: boolean;
   /** Optional observer for real repair execution boundaries; never controls verdicts. */
   onPhase?: (phase: RepairPhase) => void;
+}
+
+export interface VerifyRepositoryOptions {
+  repositoryPath: string;
+  sourceRef: string;
+  targetRef: string;
+  contractPath: string;
+  proofMetadataPath: string;
+  keepWorkspace?: boolean;
+  onPhase?: (phase: VerificationPhase) => void;
 }

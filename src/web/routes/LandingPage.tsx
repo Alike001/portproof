@@ -132,6 +132,19 @@ export function LandingPage() {
         </div>
         <Link className="button button--primary" to="/verify">Open demo workspace <span aria-hidden="true">→</span></Link>
       </section>
+
+      <section className="section local-workflow page-shell">
+        <SectionHeading eyebrow="Use PortProof on your repository" title="The hosted demo is prepared. The local CLI is repository-oriented." />
+        <div className="local-workflow__grid">
+          <ol>
+            <li><code>portproof init</code><span>Create the strict JS/TS project configuration.</span></li>
+            <li><strong>Open in IBM Bob</strong><span>Use portproof-verifier mode with the semantic-backport Skill.</span></li>
+            <li><strong>Generate semantic artifacts</strong><span>Produce the contract, target mapping, and executable proof.</span></li>
+            <li><code>portproof verify-repo …</code><span>Verify source and target refs in an isolated checkout.</span></li>
+          </ol>
+          <pre><code>{`portproof verify-repo \\\n  --repo . \\\n  --source fix/timeout-zero \\\n  --target release/1.x \\\n  --contract artifacts/behavior-contract.json \\\n  --proof-metadata artifacts/executable-proof.json`}</code></pre>
+        </div>
+      </section>
     </main>
   );
 }

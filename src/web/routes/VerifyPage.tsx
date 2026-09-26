@@ -58,7 +58,8 @@ export function VerifyPage() {
       <section className="run-header">
         <div>
           <p className="eyebrow">Prepared scenario · semantic-backport</p>
-          <h1>REQUEST_TIMEOUT_MS=0</h1>
+          <h1>Zero-timeout backport</h1>
+          <code className="scenario-identifier">REQUEST_TIMEOUT_MS=0</code>
           <div className="branch-line">
             <code>source-fix@{shortHash(sourceCommit, 8)}</code>
             <span aria-hidden="true">→</span>
@@ -102,7 +103,7 @@ export function VerifyPage() {
                 <div><dt>Duration</dt><dd>{formatDuration(report.mechanical.existingTests.durationMs)}</dd></div>
               </dl>
             </article>
-            <article className="panel evidence-card evidence-card--semantic">
+            <article className={`panel evidence-card evidence-card--semantic evidence-card--${report.semantic.proof.passed ? "pass" : "fail"}`}>
               <p className="panel-label">Semantic evidence</p>
               <div className="evidence-card__title"><h2>Public behavior</h2><StatusPill status={report.semantic.proof.passed ? "PASS" : "FAIL"} /></div>
               <dl className="metric-list">
